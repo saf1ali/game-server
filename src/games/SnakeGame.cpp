@@ -38,7 +38,7 @@ void SnakeGame::onPlayerLeave(int playerId) {
     }
 }
 
-Point SnakeGame::getSpawnPoint(int id) {
+SnakeGame::Point SnakeGame::getSpawnPoint(int id) {
     switch (id % 4) {
         case 0: return {GRID_W / 4, GRID_H / 4};
         case 1: return {3 * GRID_W / 4, GRID_H / 4};

@@ -1,6 +1,6 @@
 #include "Server.hpp"
 #include "../utils/Logger.hpp"
-#include <App.h>
+#include <uwebsockets/App.h>
 
 Server::Server(int port)
     : port_(port)
