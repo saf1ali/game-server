@@ -34,7 +34,9 @@ const App = {
         socket.on('player_joined', (data) => this.updatePlayerList());
         socket.on('player_left', (data) => this.updatePlayerList());
         socket.on('game_started', () => {
-            document.getElementById('start-game-btn').style.display = 'none';
+            const startBtn = document.getElementById('start-game-btn');
+            startBtn.style.display = 'none';
+            startBtn.textContent = 'Start Game';
             // Reset game state for fresh start
             if (Game.renderer && Game.renderer.reset) {
                 Game.renderer.reset();
@@ -153,6 +155,12 @@ const Game = {
             if (this.renderer) {
                 this.renderer.updateState(data.state);
             }
+            // Show restart button for player 1
+            if (App.playerIndex === 0) {
+                const startBtn = document.getElementById('start-game-btn');
+                startBtn.textContent = 'Restart Game';
+                startBtn.style.display = 'inline-block';
+            }
         });
     },
 
@@ -164,7 +172,9 @@ const Game = {
         this.type = null;
         socket.off('game_state');
         socket.off('game_over');
-        document.getElementById('start-game-btn').style.display = 'inline-block';
+        const startBtn = document.getElementById('start-game-btn');
+        startBtn.textContent = 'Start Game';
+        startBtn.style.display = 'inline-block';
 
         // Cleanup in-game chat
         if (typeof GameChat !== 'undefined') {
