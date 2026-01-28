@@ -116,6 +116,12 @@ const Game = {
         } else if (type === 'checkers') {
             this.renderer = CheckersRenderer;
             this.renderer.init(canvas);
+        } else if (type === 'connect4') {
+            this.renderer = Connect4Renderer;
+            this.renderer.init(canvas);
+        } else if (type === 'breakout') {
+            this.renderer = BreakoutGame;
+            this.renderer.init(canvas);
         } else if (type === 'chat') {
             this.renderer = ChatRenderer;
             this.renderer.init();
