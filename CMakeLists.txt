@@ -18,6 +18,7 @@ set(SOURCES
     src/server/Connection.cpp
     src/lobby/Lobby.cpp
     src/lobby/Room.cpp
+    src/games/Game.cpp
     src/games/PongGame.cpp
     src/games/SnakeGame.cpp
     src/games/ChatRoom.cpp
