@@ -525,6 +525,19 @@ const SnakeRenderer = {
         this.growingSegments = [];
         this.deathAnimations = [];
         this.scorePopups = [];
+        this.state = null;
+        this.prevState = null;
+        this.config = null;
+        Effects.clear();
+    },
+
+    reset() {
+        this.eatenFood = [];
+        this.growingSegments = [];
+        this.deathAnimations = [];
+        this.scorePopups = [];
+        this.state = null;
+        this.prevState = null;
         Effects.clear();
     }
 };
