@@ -4,6 +4,7 @@
 #include "ChatRoom.hpp"
 #include "TetrisGame.hpp"
 #include "CheckersGame.hpp"
+#include "ConnectFourGame.hpp"
 
 std::unique_ptr<Game> Game::create(const std::string& type) {
     if (type == "pong") {
@@ -16,6 +17,8 @@ std::unique_ptr<Game> Game::create(const std::string& type) {
         return std::make_unique<TetrisGame>();
     } else if (type == "checkers") {
         return std::make_unique<CheckersGame>();
+    } else if (type == "connect4") {
+        return std::make_unique<ConnectFourGame>();
     }
     // Add new game types here!
     return nullptr;
