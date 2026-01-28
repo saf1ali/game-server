@@ -1,0 +1,11 @@
+{
+  "name": "game-server",
+  "version": "1.0.0",
+  "description": "Real-time multiplayer game server supporting Pong, Snake, and Chat",
+  "dependencies": [
+    "uwebsockets",
+    "nlohmann-json",
+    "fmt",
+    "zlib"
+  ]
+}
