@@ -215,10 +215,12 @@ const GameChat = {
                 gap: 6px;
                 padding: 8px;
                 border-top: 1px solid rgba(5, 217, 232, 0.2);
+                overflow: hidden;
             }
 
             .game-chat-input {
                 flex: 1;
+                min-width: 0;
                 padding: 8px 12px;
                 border: 1px solid rgba(5, 217, 232, 0.3);
                 border-radius: 4px;
@@ -247,6 +249,8 @@ const GameChat = {
                 text-transform: uppercase;
                 cursor: pointer;
                 transition: all 0.2s;
+                flex-shrink: 0;
+                white-space: nowrap;
             }
 
             .game-chat-send:hover {
@@ -266,7 +270,9 @@ const GameChat = {
 
     setupSocketHandlers() {
         socket.on('chat', (data) => {
-            this.addMessage(data.from, data.message, data.from === App.username);
+            // Skip our own messages - we already added them locally in sendMessage()
+            if (data.from === App.username) return;
+            this.addMessage(data.from, data.message, false);
         });
 
         socket.on('player_joined', (data) => {
