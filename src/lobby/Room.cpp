@@ -100,7 +100,10 @@ bool Room::canStart() const {
 }
 
 void Room::start() {
-    if (!game_ || hasStarted()) return;
+    if (!game_) return;
+
+    // If game is already started but not over, don't allow restart
+    if (hasStarted() && !isOver()) return;
 
     if (!canStart()) {
         broadcast({
@@ -108,6 +111,20 @@ void Room::start() {
             {"message", "Not enough players to start"}
         });
         return;
+    }
+
+    // If game is over, recreate it for restart
+    if (isOver()) {
+        game_ = Game::create(gameType_);
+        if (!game_) {
+            Logger::error("Failed to recreate game for restart");
+            return;
+        }
+        // Re-register all players with new game
+        for (size_t i = 0; i < players_.size(); ++i) {
+            game_->onPlayerJoin(static_cast<int>(i));
+        }
+        Logger::game("Game restarted in room '{}' ({})", name_, gameType_);
     }
 
     game_->start();
