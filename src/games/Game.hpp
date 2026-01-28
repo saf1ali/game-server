@@ -106,7 +106,7 @@ public:
      * Get list of all available game types.
      */
     static std::vector<std::string> getAvailableTypes() {
-        return {"pong", "snake", "chat"};
+        return {"pong", "snake", "chat", "tetris", "checkers"};
     }
 
 protected:
