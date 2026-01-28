@@ -11,6 +11,8 @@ A high-performance multiplayer game server built in C++17 that supports multiple
 ### Supported Games
 - **Pong** (2 players) - Classic paddle game with ball physics
 - **Snake** (1-4 players) - Competitive multiplayer snake
+- **Tetris** (1-2 players) - Classic falling block puzzle
+- **Checkers** (2 players) - Strategy board game with kings
 - **Chat** (unlimited) - Real-time messaging room
 
 ### Technical Highlights
@@ -100,6 +102,22 @@ cmake --build .
 | S / ↓ | Turn down |
 | D / → | Turn right |
 
+### Tetris
+| Key | Action |
+|-----|--------|
+| A / ← | Move left |
+| D / → | Move right |
+| W / ↑ | Rotate clockwise |
+| Z | Rotate counter-clockwise |
+| S / ↓ | Soft drop |
+| Space | Hard drop |
+
+### Checkers
+| Action | How |
+|--------|-----|
+| Select piece | Click on your piece |
+| Move | Click on highlighted square |
+
 ## Adding New Games
 
 The server uses a plugin architecture. To add a new game:
@@ -172,7 +190,7 @@ game-server/
 - Supports 100+ concurrent connections
 - 60 FPS real-time state synchronization
 - Sub-20ms input latency
-- 3 game types with extensible plugin architecture
+- 5 game types with extensible plugin architecture
 
 ## Tech Stack
 
