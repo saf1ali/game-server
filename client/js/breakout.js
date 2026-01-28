@@ -44,7 +44,7 @@ const BreakoutGame = {
     lives: 3,
     level: 1,
     highScore: 0,
-    bricksDestroyed: 0,
+    paddleHits: 0,
     rowColorIndex: 0,
     bombActive: false,
     dangerFlash: 0,
@@ -143,7 +143,7 @@ const BreakoutGame = {
 
         this.score = 0;
         this.lives = 3;
-        this.bricksDestroyed = 0;
+        this.paddleHits = 0;
         this.bombActive = false;
         this.dangerFlash = 0;
         this.gameOver = false;
@@ -337,7 +337,6 @@ const BreakoutGame = {
             brick.alive = false;
             this.spawnParticles(brick);
             this.score += brick.points;
-            this.bricksDestroyed++;
         }
 
         this.bombActive = false;
@@ -463,7 +462,8 @@ const BreakoutGame = {
             if (ball.y + cfg.ballRadius > this.paddle.y &&
                 ball.y - cfg.ballRadius < this.paddle.y + cfg.paddleHeight &&
                 ball.x > this.paddle.x &&
-                ball.x < this.paddle.x + cfg.paddleWidth) {
+                ball.x < this.paddle.x + cfg.paddleWidth &&
+                ball.vy > 0) {  // Only count if ball is moving down
 
                 // Calculate hit position (-1 to 1)
                 const hitPos = (ball.x - this.paddle.x - cfg.paddleWidth / 2) / (cfg.paddleWidth / 2);
@@ -475,6 +475,13 @@ const BreakoutGame = {
                 ball.vx = Math.sin(angle) * speed;
                 ball.vy = -Math.abs(Math.cos(angle) * speed);
                 ball.y = this.paddle.y - cfg.ballRadius;
+
+                // Track paddle hits for new row spawning
+                this.paddleHits++;
+                if (this.paddleHits >= cfg.bricksPerNewRow) {
+                    this.addBrickRowFromTop();
+                    this.paddleHits = 0;
+                }
             }
 
             // Ball brick collision
@@ -491,22 +498,14 @@ const BreakoutGame = {
                         brick.alive = false;
                         this.spawnParticles(brick);
                         this.score += brick.points;
-                        this.bricksDestroyed++;
                         this.detonateBomb(brick);
                     } else {
                         brick.alive = false;
                         this.spawnParticles(brick);
                         this.score += brick.points;
-                        this.bricksDestroyed++;
 
                         // Maybe spawn drop
                         this.spawnDrop(brick);
-                    }
-
-                    // Check if we should add new row
-                    if (this.bricksDestroyed >= cfg.bricksPerNewRow) {
-                        this.addBrickRowFromTop();
-                        this.bricksDestroyed = 0;
                     }
 
                     // Determine collision side for ball reflection
