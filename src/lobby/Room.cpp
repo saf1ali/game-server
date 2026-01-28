@@ -134,6 +134,9 @@ void Room::start() {
         {"game", gameType_}
     });
 
+    // Broadcast initial game state immediately
+    broadcastState();
+
     Logger::game("Game started in room '{}' ({}) with {} players",
                  name_, gameType_, getPlayerCount());
 }
