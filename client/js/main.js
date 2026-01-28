@@ -19,6 +19,9 @@ const App = {
             socket.send('start_game');
         });
 
+        // Back to menu handler
+        document.getElementById('back-to-menu-btn').addEventListener('click', () => this.backToMenu());
+
         // Initialize lobby
         Lobby.init();
 
@@ -53,6 +56,14 @@ const App = {
         Game.cleanup();
         this.currentRoom = null;
         this.showScreen('lobby');
+    },
+
+    backToMenu() {
+        socket.disconnect();
+        this.username = '';
+        this.currentRoom = null;
+        this.playerIndex = -1;
+        this.showScreen('login');
     },
 
     updatePlayerList() {
