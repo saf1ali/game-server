@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Server - Multiplayer Games</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Login Screen -->
+        <div id="login-screen" class="screen active">
+            <div class="container">
+                <h1>Game Server</h1>
+                <p class="subtitle">Real-time Multiplayer Games</p>
+                <div class="form-group">
+                    <input type="text" id="username-input" placeholder="Enter your name" maxlength="20">
+                    <button id="join-btn" class="btn primary">Join Lobby</button>
+                </div>
+                <div class="games-preview">
+                    <div class="game-card">
+                        <span class="icon">🏓</span>
+                        <span>Pong</span>
+                    </div>
+                    <div class="game-card">
+                        <span class="icon">🐍</span>
+                        <span>Snake</span>
+                    </div>
+                    <div class="game-card">
+                        <span class="icon">💬</span>
+                        <span>Chat</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lobby Screen -->
+        <div id="lobby-screen" class="screen">
+            <div class="lobby-container">
+                <header class="lobby-header">
+                    <h2>Game Lobby</h2>
+                    <div class="player-count">
+                        <span id="online-count">0</span> players online
+                    </div>
+                </header>
+
+                <div class="lobby-content">
+                    <div class="rooms-section">
+                        <div class="section-header">
+                            <h3>Available Rooms</h3>
+                            <button id="create-room-btn" class="btn primary">+ Create Room</button>
+                        </div>
+                        <div id="rooms-list" class="rooms-list">
+                            <p class="empty-state">No rooms available. Create one!</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Create Room Modal -->
+            <div id="create-modal" class="modal">
+                <div class="modal-content">
+                    <h3>Create Room</h3>
+                    <div class="form-group">
+                        <label>Room Name</label>
+                        <input type="text" id="room-name-input" placeholder="My Room" maxlength="30">
+                    </div>
+                    <div class="form-group">
+                        <label>Game Type</label>
+                        <div class="game-select">
+                            <button class="game-option selected" data-game="pong">🏓 Pong</button>
+                            <button class="game-option" data-game="snake">🐍 Snake</button>
+                            <button class="game-option" data-game="chat">💬 Chat</button>
+                        </div>
+                    </div>
+                    <div class="modal-actions">
+                        <button id="cancel-create" class="btn">Cancel</button>
+                        <button id="confirm-create" class="btn primary">Create</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Game Screen -->
+        <div id="game-screen" class="screen">
+            <header class="game-header">
+                <button id="leave-room-btn" class="btn">← Leave</button>
+                <h3 id="room-title">Room</h3>
+                <div id="player-list" class="player-list"></div>
+            </header>
+            <div class="game-container">
+                <canvas id="game-canvas"></canvas>
+                <div id="chat-container" class="hidden">
+                    <div id="chat-messages"></div>
+                    <div class="chat-input-container">
+                        <input type="text" id="chat-input" placeholder="Type a message...">
+                        <button id="send-chat" class="btn primary">Send</button>
+                    </div>
+                </div>
+            </div>
+            <div id="game-controls" class="game-controls">
+                <button id="start-game-btn" class="btn primary">Start Game</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/websocket.js"></script>
+    <script src="js/lobby.js"></script>
+    <script src="js/pong.js"></script>
+    <script src="js/snake.js"></script>
+    <script src="js/chat.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
