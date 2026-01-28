@@ -1,5 +1,5 @@
 #include "Connection.hpp"
-#include <App.h>
+#include <uwebsockets/App.h>
 
 Connection::Connection(WebSocket* ws, uint64_t id)
     : ws_(ws)

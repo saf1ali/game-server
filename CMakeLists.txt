@@ -8,7 +8,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Find packages
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
-find_package(uwebsockets CONFIG REQUIRED)
+find_package(unofficial-uwebsockets CONFIG REQUIRED)
 find_package(ZLIB REQUIRED)
 
 # Source files
@@ -53,7 +53,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 target_link_libraries(${PROJECT_NAME} PRIVATE
     nlohmann_json::nlohmann_json
     fmt::fmt
-    uwebsockets::uwebsockets
+    unofficial::uwebsockets::uwebsockets
     ZLIB::ZLIB
 )
 
