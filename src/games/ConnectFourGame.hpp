@@ -20,8 +20,6 @@ public:
     json getState() const override;
 
     bool isOver() const override { return gameOver_; }
-    bool hasStarted() const override { return started_; }
-    bool isRunning() const override { return started_ && !gameOver_; }
 
     std::string getType() const override { return "connect4"; }
     int getMinPlayers() const override { return 2; }
