@@ -34,7 +34,7 @@ private:
     int currentPlayer_;
     int winner_;
     bool gameOver_;
-    bool started_;
+    // Note: started_ is inherited from base Game class
     int numPlayers_;
 
     // Last move for animation

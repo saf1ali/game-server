@@ -157,8 +157,20 @@ void Room::update(float deltaTime) {
 }
 
 void Room::handleInput(int playerId, const json& input) {
-    if (game_ && game_->isRunning()) {
-        game_->handleInput(playerId, input);
+    if (!game_ || !game_->hasStarted() || game_->isOver()) return;
+
+    game_->handleInput(playerId, input);
+
+    // Broadcast updated state after input (important for turn-based games)
+    broadcastState();
+
+    // Check if game just ended
+    if (game_->isOver()) {
+        broadcast({
+            {"type", "game_over"},
+            {"state", game_->getState()}
+        });
+        Logger::game("Game ended in room '{}'", name_);
     }
 }
 
