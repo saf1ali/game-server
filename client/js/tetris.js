@@ -527,6 +527,17 @@ const TetrisRenderer = {
         this.keysPressed.clear();
         this.clearingLines = [];
         this.scorePopups = [];
+        this.state = null;
+        this.prevState = null;
+        this.config = null;
+        Effects.clear();
+    },
+
+    reset() {
+        this.clearingLines = [];
+        this.scorePopups = [];
+        this.state = null;
+        this.prevState = null;
         Effects.clear();
     }
 };

@@ -35,6 +35,10 @@ const App = {
         socket.on('player_left', (data) => this.updatePlayerList());
         socket.on('game_started', () => {
             document.getElementById('start-game-btn').style.display = 'none';
+            // Reset game state for fresh start
+            if (Game.renderer && Game.renderer.reset) {
+                Game.renderer.reset();
+            }
         });
     },
 

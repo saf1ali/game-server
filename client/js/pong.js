@@ -428,6 +428,19 @@ const PongRenderer = {
         this.ballTrail = [];
         this.scoreAnimations = [];
         this.goalFlash = null;
+        this.state = null;
+        this.prevState = null;
+        this.config = null;
+        Effects.clear();
+    },
+
+    reset() {
+        this.paddleHits = [];
+        this.ballTrail = [];
+        this.scoreAnimations = [];
+        this.goalFlash = null;
+        this.state = null;
+        this.prevState = null;
         Effects.clear();
     }
 };

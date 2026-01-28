@@ -603,6 +603,22 @@ const CheckersRenderer = {
         this.movingPieces = [];
         this.capturedPieces = [];
         this.promotingPieces = [];
+        this.state = null;
+        this.prevState = null;
+        this.selectedPiece = null;
+        this.validMoves = [];
+        Effects.clear();
+    },
+
+    reset() {
+        this.hoveredCell = null;
+        this.movingPieces = [];
+        this.capturedPieces = [];
+        this.promotingPieces = [];
+        this.state = null;
+        this.prevState = null;
+        this.selectedPiece = null;
+        this.validMoves = [];
         Effects.clear();
     }
 };
