@@ -93,6 +93,12 @@ const Game = {
         } else if (type === 'snake') {
             this.renderer = SnakeRenderer;
             this.renderer.init(canvas);
+        } else if (type === 'tetris') {
+            this.renderer = TetrisRenderer;
+            this.renderer.init(canvas);
+        } else if (type === 'checkers') {
+            this.renderer = CheckersRenderer;
+            this.renderer.init(canvas);
         } else if (type === 'chat') {
             this.renderer = ChatRenderer;
             this.renderer.init();
