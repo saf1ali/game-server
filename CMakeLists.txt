@@ -22,6 +22,8 @@ set(SOURCES
     src/games/PongGame.cpp
     src/games/SnakeGame.cpp
     src/games/ChatRoom.cpp
+    src/games/TetrisGame.cpp
+    src/games/CheckersGame.cpp
 )
 
 # Header files
