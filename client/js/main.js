@@ -98,6 +98,9 @@ const Game = {
     isSinglePlayer: false,
 
     init(type, roomData) {
+        // Clean up any previous game first
+        this.cleanup();
+
         this.type = type;
         this.isSinglePlayer = false;
         document.getElementById('room-title').textContent = roomData.roomName;
@@ -108,6 +111,10 @@ const Game = {
 
         // Setup renderer
         const canvas = document.getElementById('game-canvas');
+
+        // Clear canvas before starting new game
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         if (type === 'pong') {
             this.renderer = PongRenderer;
@@ -196,6 +203,9 @@ const Game = {
 
     // Initialize single-player games (run entirely in browser)
     initSinglePlayer(type) {
+        // Clean up any previous game first
+        this.cleanup();
+
         this.type = type;
         this.isSinglePlayer = true;
         document.getElementById('room-title').textContent = type.charAt(0).toUpperCase() + type.slice(1);
@@ -209,6 +219,10 @@ const Game = {
 
         // Setup renderer
         const canvas = document.getElementById('game-canvas');
+
+        // Clear canvas before starting new game
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         if (type === 'breakout') {
             this.renderer = BreakoutGame;

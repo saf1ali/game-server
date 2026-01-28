@@ -196,5 +196,10 @@ const Connect4Renderer = {
     cleanup() {
         this.hoveredCol = -1;
         this.state = null;
+
+        // Clear the canvas
+        if (this.ctx && this.canvas) {
+            this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        }
     }
 };

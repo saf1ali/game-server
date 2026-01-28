@@ -379,5 +379,13 @@ const BreakoutGame = {
         this.running = false;
         this.keys = { left: false, right: false };
         this.mouseX = null;
+        this.gameOver = false;
+        this.won = false;
+        this.paused = false;
+
+        // Clear the canvas
+        if (this.ctx && this.canvas) {
+            this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        }
     }
 };
