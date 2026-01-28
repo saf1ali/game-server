@@ -62,15 +62,47 @@ const Lobby = {
     },
 
     getGameIcon(game) {
-        const icons = { pong: '🏓', snake: '🐍', tetris: '🧱', checkers: '🎯', chat: '💬' };
+        const icons = { pong: '🏓', snake: '🐍', tetris: '🧱', checkers: '🎯', connect4: '🔴', breakout: '🧱', chat: '💬' };
         return icons[game] || '🎮';
+    },
+
+    // Single player games run entirely in browser
+    singlePlayerGames: ['breakout'],
+
+    isSinglePlayer(game) {
+        return this.singlePlayerGames.includes(game);
     },
 
     createRoom() {
         const name = document.getElementById('room-name-input').value.trim() || 'My Room';
+
+        // Handle single-player games differently
+        if (this.isSinglePlayer(this.selectedGame)) {
+            document.getElementById('create-modal').classList.remove('active');
+            document.getElementById('room-name-input').value = '';
+            this.startSinglePlayerGame(this.selectedGame);
+            return;
+        }
+
         socket.send('create_room', { game: this.selectedGame, name });
         document.getElementById('create-modal').classList.remove('active');
         document.getElementById('room-name-input').value = '';
+    },
+
+    startSinglePlayerGame(gameType) {
+        // Set up fake room data for single-player
+        App.currentRoom = {
+            roomId: 'local',
+            roomName: gameType.charAt(0).toUpperCase() + gameType.slice(1),
+            game: gameType,
+            playerIndex: 0,
+            players: [{ username: App.username, index: 0 }]
+        };
+        App.playerIndex = 0;
+        App.showScreen('game');
+
+        // Initialize the single-player game
+        Game.initSinglePlayer(gameType);
     },
 
     joinRoom(roomId) {

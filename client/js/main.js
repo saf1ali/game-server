@@ -58,7 +58,10 @@ const App = {
     },
 
     leaveRoom() {
-        socket.send('leave_room');
+        // Only send leave_room for multiplayer games
+        if (!Game.isSinglePlayer) {
+            socket.send('leave_room');
+        }
         Game.cleanup();
         this.currentRoom = null;
         this.showScreen('lobby');
@@ -92,9 +95,11 @@ const App = {
 const Game = {
     type: null,
     renderer: null,
+    isSinglePlayer: false,
 
     init(type, roomData) {
         this.type = type;
+        this.isSinglePlayer = false;
         document.getElementById('room-title').textContent = roomData.roomName;
 
         // Show/hide start button
@@ -176,6 +181,7 @@ const Game = {
         }
         this.renderer = null;
         this.type = null;
+        this.isSinglePlayer = false;
         socket.off('game_state');
         socket.off('game_over');
         const startBtn = document.getElementById('start-game-btn');
@@ -186,6 +192,29 @@ const Game = {
         if (typeof GameChat !== 'undefined') {
             GameChat.cleanup();
         }
+    },
+
+    // Initialize single-player games (run entirely in browser)
+    initSinglePlayer(type) {
+        this.type = type;
+        this.isSinglePlayer = true;
+        document.getElementById('room-title').textContent = type.charAt(0).toUpperCase() + type.slice(1);
+
+        // Hide start button for single-player games (they start immediately)
+        const startBtn = document.getElementById('start-game-btn');
+        startBtn.style.display = 'none';
+
+        // Hide player list for single-player
+        document.getElementById('player-list').innerHTML = '';
+
+        // Setup renderer
+        const canvas = document.getElementById('game-canvas');
+
+        if (type === 'breakout') {
+            this.renderer = BreakoutGame;
+            this.renderer.init(canvas);
+        }
+        // Add more single-player games here
     }
 };
 
