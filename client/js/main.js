@@ -104,6 +104,11 @@ const Game = {
             this.renderer.init();
         }
 
+        // Initialize in-game chat for all games except chat room
+        if (type !== 'chat' && typeof GameChat !== 'undefined') {
+            GameChat.init();
+        }
+
         // Update player list
         App.currentRoom.players = roomData.players;
         App.updatePlayerList();
@@ -145,6 +150,11 @@ const Game = {
         socket.off('game_state');
         socket.off('game_over');
         document.getElementById('start-game-btn').style.display = 'inline-block';
+
+        // Cleanup in-game chat
+        if (typeof GameChat !== 'undefined') {
+            GameChat.cleanup();
+        }
     }
 };
 
