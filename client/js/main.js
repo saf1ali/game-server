@@ -134,6 +134,9 @@ const Game = {
         } else if (type === 'breakout') {
             this.renderer = BreakoutGame;
             this.renderer.init(canvas);
+        } else if (type === 'slither') {
+            this.renderer = SlitherRenderer;
+            this.renderer.init(canvas);
         } else if (type === 'chat') {
             this.renderer = ChatRenderer;
             this.renderer.init();

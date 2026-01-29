@@ -62,7 +62,7 @@ const Lobby = {
     },
 
     getGameIcon(game) {
-        const icons = { pong: '🏓', snake: '🐍', tetris: '🧱', checkers: '🎯', connect4: '🔴', breakout: '🏐', chat: '💬' };
+        const icons = { pong: '🏓', snake: '🐍', tetris: '🧱', checkers: '🎯', connect4: '🔴', slither: '🐍', breakout: '🏐', chat: '💬' };
         return icons[game] || '🎮';
     },
 
