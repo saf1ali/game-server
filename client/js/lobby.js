@@ -62,12 +62,12 @@ const Lobby = {
     },
 
     getGameIcon(game) {
-        const icons = { pong: '🏓', snake: '🐍', tetris: '🧱', checkers: '🎯', connect4: '🔴', slither: '🪱', breakout: '🏐', chat: '💬', towerdefense: '🏰', agar: '🦠' };
+        const icons = { pong: '🏓', snake: '🐍', tetris: '🧱', checkers: '🎯', connect4: '🔴', slither: '🪱', breakout: '🏐', chat: '💬', towerdefense: '🏰', agar: '🦠', hillclimb: '🚗' };
         return icons[game] || '🎮';
     },
 
     // Single player games run entirely in browser
-    singlePlayerGames: ['breakout'],
+    singlePlayerGames: ['breakout', 'hillclimb'],
 
     isSinglePlayer(game) {
         return this.singlePlayerGames.includes(game);
