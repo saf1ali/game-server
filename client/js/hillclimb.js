@@ -71,13 +71,13 @@ const HillClimbGame = {
     // First fuel tracking
     firstFuelSpawned: false,
 
-    // Vehicle definitions
+    // Vehicle definitions - tuned for fun, responsive gameplay
     vehicles: {
         jeep: {
             name: 'Jeep',
             mass: 1.0,
-            maxSpeed: 12,
-            accel: 0.4,
+            maxSpeed: 18,
+            accel: 0.9,
             fuelCapacity: 100,
             wheelBase: 45,
             bodyWidth: 60,
@@ -90,8 +90,8 @@ const HillClimbGame = {
             name: 'Motorbike',
             cost: 25000,
             mass: 0.5,
-            maxSpeed: 15,
-            accel: 0.6,
+            maxSpeed: 22,
+            accel: 1.2,
             fuelCapacity: 60,
             wheelBase: 35,
             bodyWidth: 40,
@@ -104,8 +104,8 @@ const HillClimbGame = {
             name: 'Monster Truck',
             cost: 100000,
             mass: 1.8,
-            maxSpeed: 10,
-            accel: 0.3,
+            maxSpeed: 15,
+            accel: 0.7,
             fuelCapacity: 120,
             wheelBase: 55,
             bodyWidth: 70,
@@ -118,8 +118,8 @@ const HillClimbGame = {
             name: 'Race Car',
             cost: 250000,
             mass: 0.8,
-            maxSpeed: 18,
-            accel: 0.5,
+            maxSpeed: 28,
+            accel: 1.0,
             fuelCapacity: 80,
             wheelBase: 50,
             bodyWidth: 65,
@@ -132,8 +132,8 @@ const HillClimbGame = {
             name: 'Bus',
             cost: 500000,
             mass: 2.5,
-            maxSpeed: 8,
-            accel: 0.2,
+            maxSpeed: 12,
+            accel: 0.5,
             fuelCapacity: 150,
             wheelBase: 80,
             bodyWidth: 100,
@@ -153,16 +153,16 @@ const HillClimbGame = {
     // Mouse state for garage UI
     mouse: { x: 0, y: 0, clicked: false },
 
-    // Physics constants
+    // Physics constants - tuned for responsive, fun gameplay
     physics: {
-        gravity: 0.6,
-        springStiffness: 0.35,
-        springDamping: 0.15,
+        gravity: 0.5,
+        springStiffness: 0.3,
+        springDamping: 0.12,
         springRestLength: 20,
         friction: 0.8,
-        airRotationSpeed: 0.003,
-        groundFriction: 0.98,
-        airDrag: 0.999
+        airRotationSpeed: 0.004,
+        groundFriction: 0.992,
+        airDrag: 0.998
     },
 
     // Wheels state
