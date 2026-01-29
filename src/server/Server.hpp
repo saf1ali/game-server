@@ -3,7 +3,6 @@
 #include <memory>
 #include <unordered_map>
 #include <atomic>
-#include <thread>
 #include <chrono>
 #include "Connection.hpp"
 #include "../lobby/Lobby.hpp"
@@ -11,6 +10,7 @@
 /**
  * Main WebSocket server class.
  * Handles connections, message routing, and the game loop.
+ * All operations run on a single thread for thread safety with uWebSockets.
  */
 class Server {
 public:
@@ -43,9 +43,6 @@ private:
     void handleInput(Connection* conn, const json& data);
     void handleChat(Connection* conn, const json& data);
 
-    // Game loop
-    void gameLoop();
-
     int port_;
     std::atomic<bool> running_{false};
     std::atomic<uint64_t> nextConnectionId_{1};
@@ -56,7 +53,6 @@ private:
     Lobby lobby_;
 
     // Game loop timing
-    static constexpr float TARGET_FPS = 60.0f;
-    static constexpr float FRAME_TIME = 1.0f / TARGET_FPS;
-    std::thread gameLoopThread_;
+    static constexpr int TICK_RATE_MS = 16;  // ~60 FPS
+    std::chrono::high_resolution_clock::time_point lastUpdateTime_;
 };

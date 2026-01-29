@@ -28,9 +28,9 @@ const BreakoutGame = {
         bricksPerNewRow: 6,
         dangerZoneRows: 2,
         dropChances: {
-            multiball: 0.15,
-            extraLife: 0.08,
-            bomb: 0.12
+            multiball: 0.02,
+            extraLife: 0.01,
+            bomb: 0.02
         }
     },
 
@@ -703,12 +703,12 @@ const BreakoutGame = {
             ctx.fillText('💣 BOMB READY!', 20, 55);
         }
 
-        // Ball count indicator (if multiple)
+        // Ball count indicator (if multiple) - show bottom left to avoid covering bricks
         const activeBalls = this.balls.filter(b => b.active).length;
         if (activeBalls > 1) {
             ctx.fillStyle = '#05ffa1';
-            ctx.textAlign = 'center';
-            ctx.fillText(`BALLS: ${activeBalls}`, cfg.width / 2, 55);
+            ctx.textAlign = 'left';
+            ctx.fillText(`BALLS: ${activeBalls}`, 20, cfg.height - 60);
         }
 
         // Pause overlay

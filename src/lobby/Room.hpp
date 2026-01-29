@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <mutex>
 #include <nlohmann/json.hpp>
 #include "../games/Game.hpp"
 #include "../server/Connection.hpp"
@@ -54,4 +55,5 @@ private:
     std::string gameType_;
     std::unique_ptr<Game> game_;
     std::vector<Connection*> players_;
+    mutable std::recursive_mutex gameMutex_;  // Protects game_ access between threads
 };

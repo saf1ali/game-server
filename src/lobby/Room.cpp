@@ -50,8 +50,11 @@ bool Room::addPlayer(Connection* conn) {
         }
     }
 
-    if (game_) {
-        game_->onPlayerJoin(playerIndex);
+    {
+        std::lock_guard<std::recursive_mutex> lock(gameMutex_);
+        if (game_) {
+            game_->onPlayerJoin(playerIndex, conn->getUsername());
+        }
     }
 
     Logger::game("Player '{}' joined room '{}' ({})", conn->getUsername(), name_, gameType_);
@@ -80,8 +83,11 @@ void Room::removePlayer(Connection* conn) {
         {"playerIndex", playerIndex}
     });
 
-    if (game_) {
-        game_->onPlayerLeave(playerIndex);
+    {
+        std::lock_guard<std::recursive_mutex> lock(gameMutex_);
+        if (game_) {
+            game_->onPlayerLeave(playerIndex);
+        }
     }
 
     Logger::game("Player '{}' left room '{}'", conn->getUsername(), name_);
@@ -95,15 +101,18 @@ Connection* Room::getPlayer(int index) {
 }
 
 bool Room::canStart() const {
+    std::lock_guard<std::recursive_mutex> lock(gameMutex_);
     if (!game_) return false;
     return getPlayerCount() >= game_->getMinPlayers();
 }
 
 void Room::start() {
+    std::lock_guard<std::recursive_mutex> lock(gameMutex_);
+
     if (!game_) return;
 
     // If game is already started but not over, don't allow restart
-    if (hasStarted() && !isOver()) return;
+    if (game_->hasStarted() && !game_->isOver()) return;
 
     if (!canStart()) {
         broadcast({
@@ -114,7 +123,7 @@ void Room::start() {
     }
 
     // If game is over, recreate it for restart
-    if (isOver()) {
+    if (game_->isOver()) {
         game_ = Game::create(gameType_);
         if (!game_) {
             Logger::error("Failed to recreate game for restart");
@@ -122,7 +131,7 @@ void Room::start() {
         }
         // Re-register all players with new game
         for (size_t i = 0; i < players_.size(); ++i) {
-            game_->onPlayerJoin(static_cast<int>(i));
+            game_->onPlayerJoin(static_cast<int>(i), players_[i]->getUsername());
         }
         Logger::game("Game restarted in room '{}' ({})", name_, gameType_);
     }
@@ -134,18 +143,30 @@ void Room::start() {
         {"game", gameType_}
     });
 
-    // Broadcast initial game state immediately
-    broadcastState();
+    // Broadcast initial game state immediately (inline to keep lock)
+    json state = {
+        {"type", "game_state"},
+        {"state", game_->getState()}
+    };
+    broadcast(state);
 
     Logger::game("Game started in room '{}' ({}) with {} players",
                  name_, gameType_, getPlayerCount());
 }
 
 void Room::update(float deltaTime) {
+    std::lock_guard<std::recursive_mutex> lock(gameMutex_);
+
     if (!game_ || !game_->isRunning()) return;
 
     game_->update(deltaTime);
-    broadcastState();
+
+    // Broadcast state inline to keep lock
+    json state = {
+        {"type", "game_state"},
+        {"state", game_->getState()}
+    };
+    broadcast(state);
 
     if (game_->isOver()) {
         broadcast({
@@ -157,12 +178,18 @@ void Room::update(float deltaTime) {
 }
 
 void Room::handleInput(int playerId, const json& input) {
+    std::lock_guard<std::recursive_mutex> lock(gameMutex_);
+
     if (!game_ || !game_->hasStarted() || game_->isOver()) return;
 
     game_->handleInput(playerId, input);
 
     // Broadcast updated state after input (important for turn-based games)
-    broadcastState();
+    json state = {
+        {"type", "game_state"},
+        {"state", game_->getState()}
+    };
+    broadcast(state);
 
     // Check if game just ended
     if (game_->isOver()) {
@@ -182,6 +209,8 @@ void Room::broadcast(const json& message) {
 }
 
 void Room::broadcastState() {
+    std::lock_guard<std::recursive_mutex> lock(gameMutex_);
+
     if (!game_) return;
 
     json state = {

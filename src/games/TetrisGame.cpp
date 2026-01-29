@@ -66,7 +66,7 @@ void TetrisGame::start() {
     Logger::game("Tetris started with {} player(s)!", numPlayers_);
 }
 
-void TetrisGame::onPlayerJoin(int playerId) {
+void TetrisGame::onPlayerJoin(int playerId, const std::string& /*username*/) {
     if (playerId >= static_cast<int>(players_.size())) {
         players_.resize(playerId + 1);
     }

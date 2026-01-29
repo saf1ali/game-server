@@ -11,7 +11,7 @@ void SnakeGame::start() {
     Logger::game("Snake game started with {} players!", numPlayers_);
 }
 
-void SnakeGame::onPlayerJoin(int playerId) {
+void SnakeGame::onPlayerJoin(int playerId, const std::string& /*username*/) {
     if (playerId >= static_cast<int>(snakes_.size())) {
         snakes_.resize(playerId + 1);
     }

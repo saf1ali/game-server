@@ -40,29 +40,33 @@ void SlitherGame::start() {
 void SlitherGame::update(float deltaTime) {
     if (!started_ || gameOver_ || snakes_.empty()) return;
 
-    // Move all alive snakes
-    for (int i = 0; i < static_cast<int>(snakes_.size()); i++) {
-        if (snakes_[i].alive && !snakes_[i].body.empty()) {
-            moveSnake(i, deltaTime);
+    try {
+        // Move all alive snakes
+        for (int i = 0; i < static_cast<int>(snakes_.size()); i++) {
+            if (snakes_[i].alive && !snakes_[i].body.empty()) {
+                moveSnake(i, deltaTime);
+            }
         }
-    }
 
-    // Check collisions for all snakes
-    for (int i = 0; i < static_cast<int>(snakes_.size()); i++) {
-        if (snakes_[i].alive && !snakes_[i].body.empty()) {
-            checkFoodCollision(i);
-            checkWallCollision(i);
-            checkSnakeCollision(i);
+        // Check collisions for all snakes
+        for (int i = 0; i < static_cast<int>(snakes_.size()); i++) {
+            if (snakes_[i].alive && !snakes_[i].body.empty()) {
+                checkFoodCollision(i);
+                checkWallCollision(i);
+                checkSnakeCollision(i);
+            }
         }
-    }
 
-    // Maintain pellet count
-    while (pellets_.size() < static_cast<size_t>(INITIAL_PELLETS)) {
-        spawnPellet();
-    }
+        // Maintain pellet count
+        while (pellets_.size() < static_cast<size_t>(INITIAL_PELLETS)) {
+            spawnPellet();
+        }
 
-    // Check if round ended
-    checkRoundEnd();
+        // Check if round ended
+        checkRoundEnd();
+    } catch (const std::exception& e) {
+        Logger::error("Exception in SlitherGame::update: {}", e.what());
+    }
 }
 
 void SlitherGame::handleInput(int playerId, const json& input) {
@@ -348,15 +352,19 @@ void SlitherGame::checkRoundEnd() {
 }
 
 void SlitherGame::startNewRound() {
+    Logger::game("Starting new round setup...");
     currentRound_++;
     roundInProgress_ = true;
 
     // Respawn all snakes
+    Logger::game("Respawning {} snakes...", snakes_.size());
     for (int i = 0; i < static_cast<int>(snakes_.size()); i++) {
         spawnSnake(i);
+        Logger::game("Spawned snake {}", i);
     }
 
     // Reset pellets
+    Logger::game("Resetting pellets...");
     pellets_.clear();
     for (int i = 0; i < INITIAL_PELLETS; i++) {
         spawnPellet();

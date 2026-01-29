@@ -25,7 +25,7 @@ public:
     int getMinPlayers() const override { return 2; }
     int getMaxPlayers() const override { return 2; }
 
-    void onPlayerJoin(int playerId) override;
+    void onPlayerJoin(int playerId, const std::string& username = "") override;
     void onPlayerLeave(int playerId) override;
 
 private:

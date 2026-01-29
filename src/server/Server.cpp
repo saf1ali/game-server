@@ -5,6 +5,7 @@
 Server::Server(int port)
     : port_(port)
     , lobby_(*this)
+    , lastUpdateTime_(std::chrono::high_resolution_clock::now())
 {
 }
 
@@ -15,54 +16,72 @@ Server::~Server() {
 void Server::run() {
     running_ = true;
 
-    // Start game loop in separate thread
-    gameLoopThread_ = std::thread(&Server::gameLoop, this);
-
     Logger::info("Starting server on port {}...", port_);
 
-    uWS::App()
-        .ws<void*>("/*", {
-            .compression = uWS::SHARED_COMPRESSOR,
-            .maxPayloadLength = 16 * 1024,
-            .idleTimeout = 120,
-            .maxBackpressure = 1 * 1024 * 1024,
+    // Create the app
+    auto app = uWS::App();
 
-            .open = [this](auto* ws) {
-                onOpen(ws);
-            },
+    // Setup WebSocket handlers
+    app.ws<void*>("/*", {
+        .compression = uWS::SHARED_COMPRESSOR,
+        .maxPayloadLength = 16 * 1024,
+        .idleTimeout = 120,
+        .maxBackpressure = 1 * 1024 * 1024,
 
-            .message = [this](auto* ws, std::string_view message, uWS::OpCode opCode) {
-                if (opCode == uWS::OpCode::TEXT) {
-                    onMessage(ws, message);
-                }
-            },
+        .open = [this](auto* ws) {
+            onOpen(ws);
+        },
 
-            .close = [this](auto* ws, int code, std::string_view message) {
-                onClose(ws);
+        .message = [this](auto* ws, std::string_view message, uWS::OpCode opCode) {
+            if (opCode == uWS::OpCode::TEXT) {
+                onMessage(ws, message);
             }
-        })
-        .listen(port_, [this](auto* listenSocket) {
-            if (listenSocket) {
-                Logger::info("Server listening on ws://localhost:{}", port_);
-                Logger::info("Open client/index.html in your browser to play!");
-            } else {
-                Logger::error("Failed to listen on port {}", port_);
-                running_ = false;
-            }
-        })
-        .run();
+        },
+
+        .close = [this](auto* ws, int code, std::string_view message) {
+            onClose(ws);
+        }
+    });
+
+    // Listen on port
+    app.listen(port_, [this](auto* listenSocket) {
+        if (listenSocket) {
+            Logger::info("Server listening on ws://localhost:{}", port_);
+            Logger::info("Open client/index.html in your browser to play!");
+        } else {
+            Logger::error("Failed to listen on port {}", port_);
+            running_ = false;
+        }
+    });
+
+    // Create a timer for the game loop using low-level uSockets API
+    // This runs on the same thread as WebSocket events for thread safety
+    struct us_loop_t* loop = reinterpret_cast<struct us_loop_t*>(uWS::Loop::get());
+
+    // Create timer with space for Server pointer
+    struct us_timer_t* gameTimer = us_create_timer(loop, 0, sizeof(Server*));
+    *static_cast<Server**>(us_timer_ext(gameTimer)) = this;
+
+    // Set timer callback - runs every 16ms (~60 FPS)
+    us_timer_set(gameTimer, [](struct us_timer_t* timer) {
+        Server* server = *static_cast<Server**>(us_timer_ext(timer));
+
+        auto now = std::chrono::high_resolution_clock::now();
+        float deltaTime = std::chrono::duration<float>(now - server->lastUpdateTime_).count();
+        server->lastUpdateTime_ = now;
+
+        // Update all game rooms
+        server->lobby_.update(deltaTime);
+    }, TICK_RATE_MS, TICK_RATE_MS);
+
+    // Run the event loop
+    app.run();
 
     running_ = false;
-    if (gameLoopThread_.joinable()) {
-        gameLoopThread_.join();
-    }
 }
 
 void Server::stop() {
     running_ = false;
-    if (gameLoopThread_.joinable()) {
-        gameLoopThread_.join();
-    }
 }
 
 Connection* Server::getConnection(uint64_t id) {
@@ -206,22 +225,3 @@ void Server::handleChat(Connection* conn, const json& data) {
     }
 }
 
-void Server::gameLoop() {
-    using clock = std::chrono::high_resolution_clock;
-    auto lastTime = clock::now();
-
-    while (running_) {
-        auto currentTime = clock::now();
-        float deltaTime = std::chrono::duration<float>(currentTime - lastTime).count();
-
-        if (deltaTime >= FRAME_TIME) {
-            lastTime = currentTime;
-
-            // Update all active rooms
-            lobby_.update(deltaTime);
-        }
-
-        // Sleep a bit to not burn CPU
-        std::this_thread::sleep_for(std::chrono::microseconds(100));
-    }
-}

@@ -48,15 +48,15 @@ public:
     int getMinPlayers() const override { return 2; }
     int getMaxPlayers() const override { return 6; }
 
-    void onPlayerJoin(int playerId) override;
+    void onPlayerJoin(int playerId, const std::string& username = "") override;
     void onPlayerLeave(int playerId) override;
 
 private:
     struct Snake {
         std::deque<Vector2> body;  // body[0] = head
-        Vector2 direction;         // normalized direction vector
-        Vector2 targetDir;         // direction toward mouse
-        bool alive = true;
+        Vector2 direction{1.0f, 0.0f};   // normalized direction vector
+        Vector2 targetDir{1.0f, 0.0f};   // direction toward mouse
+        bool alive = false;
         bool boosting = false;
         float boostTimer = 0.0f;
         int score = 0;

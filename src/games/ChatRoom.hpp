@@ -19,7 +19,7 @@ public:
     std::string getType() const override { return "chat"; }
     int getMinPlayers() const override { return 1; }
     int getMaxPlayers() const override { return 100; }
-    void onPlayerJoin(int playerId) override;
+    void onPlayerJoin(int playerId, const std::string& username = "") override;
     void onPlayerLeave(int playerId) override;
 
 private:

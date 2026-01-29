@@ -19,11 +19,11 @@ std::string ChatRoom::getTimestamp() const {
     return ss.str();
 }
 
-void ChatRoom::onPlayerJoin(int playerId) {
+void ChatRoom::onPlayerJoin(int playerId, const std::string& username) {
     if (playerId >= static_cast<int>(users_.size())) {
         users_.resize(playerId + 1);
     }
-    users_[playerId] = "User" + std::to_string(playerId);
+    users_[playerId] = username.empty() ? "User" + std::to_string(playerId) : username;
 
     messages_.push_back({users_[playerId], "joined the chat", getTimestamp(), "join"});
     if (messages_.size() > MAX_HISTORY) {

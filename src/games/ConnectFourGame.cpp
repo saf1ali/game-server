@@ -25,7 +25,7 @@ void ConnectFourGame::update(float deltaTime) {
     // Turn-based game, no continuous updates needed
 }
 
-void ConnectFourGame::onPlayerJoin(int playerId) {
+void ConnectFourGame::onPlayerJoin(int playerId, const std::string& /*username*/) {
     numPlayers_++;
     Logger::game("Player {} joined Connect Four", playerId);
 }

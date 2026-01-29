@@ -121,7 +121,13 @@ void Lobby::startGame(Connection* conn) {
 
 void Lobby::update(float deltaTime) {
     for (auto& [id, room] : rooms_) {
-        room->update(deltaTime);
+        try {
+            room->update(deltaTime);
+        } catch (const std::exception& e) {
+            Logger::error("Exception in room {} update: {}", id, e.what());
+        } catch (...) {
+            Logger::error("Unknown exception in room {} update", id);
+        }
     }
 
     // Periodically clean up

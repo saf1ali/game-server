@@ -108,42 +108,48 @@ const SlitherRenderer = {
     render() {
         if (!this.ctx) return;
 
-        const ctx = this.ctx;
+        try {
+            const ctx = this.ctx;
 
-        // Clear and draw background
-        ctx.fillStyle = this.config.bgColor;
-        ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+            // Clear and draw background
+            ctx.fillStyle = this.config.bgColor;
+            ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
-        // Draw grid
-        this.drawGrid();
+            // Draw grid
+            this.drawGrid();
 
-        // Draw border
-        this.drawBorder();
+            // Draw border
+            this.drawBorder();
 
-        if (!this.state) {
-            // Show waiting message
-            ctx.font = 'bold 24px Orbitron, sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillStyle = '#888';
-            ctx.fillText('Waiting for game to start...', this.canvas.width / 2, this.canvas.height / 2);
-            return;
-        }
+            if (!this.state || !this.state.players) {
+                // Show waiting message
+                ctx.font = 'bold 24px Orbitron, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillStyle = '#888';
+                ctx.fillText('Waiting for game to start...', this.canvas.width / 2, this.canvas.height / 2);
+                return;
+            }
 
-        // Draw pellets
-        this.drawPellets();
+            // Draw pellets
+            if (this.state.pellets) {
+                this.drawPellets();
+            }
 
-        // Draw snakes
-        this.drawSnakes();
+            // Draw snakes
+            this.drawSnakes();
 
-        // Draw UI (scores, round indicator)
-        this.drawUI();
+            // Draw UI (scores, round indicator)
+            this.drawUI();
 
-        // Draw boost indicator
-        this.drawBoostIndicator();
+            // Draw boost indicator
+            this.drawBoostIndicator();
 
-        // Draw game over overlay
-        if (this.state.gameOver) {
-            this.drawGameOver();
+            // Draw game over overlay
+            if (this.state.gameOver) {
+                this.drawGameOver();
+            }
+        } catch (e) {
+            console.error('Slither render error:', e);
         }
     },
 
