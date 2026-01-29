@@ -892,14 +892,43 @@ const HillClimbGame = {
             this.spawnParticle(car.x, car.y - 30, 'flip');
         }
 
-        // Check for crash (head touching ground)
+        // Check for crash (head touching ground) - MORE FORGIVING
         const headX = car.x + sinR * vehicle.bodyHeight;
         const headY = car.y - cosR * vehicle.bodyHeight;
         const headGroundY = this.getTerrainHeight(headX);
 
-        if (headY > headGroundY - 5 && Math.abs(car.rotation) > Math.PI / 3) {
-            this.gameOver('crash');
-            return;
+        // Constants for forgiving crash detection
+        const CRASH_ANGLE_THRESHOLD = Math.PI * 0.44;  // ~80 degrees (up from 60)
+        const SEVERE_FLIP_ANGLE = Math.PI * 0.8;       // ~144 degrees
+        const GROUND_BUFFER = 12;                       // 12px buffer (up from 5)
+        const GRACE_PERIOD_MS = 500;                    // 0.5 second grace after bad landing
+        const SUSTAINED_CRASH_FRAMES = 9;               // ~0.15 seconds at 60fps
+
+        // Check if in grace period after bad landing
+        const timeSinceBadLanding = performance.now() - this.lastBadLandingTime;
+        const inGracePeriod = timeSinceBadLanding < GRACE_PERIOD_MS;
+
+        // Evaluate crash conditions
+        const headPenetration = headY - (headGroundY - GROUND_BUFFER);
+        const isSevereAngle = Math.abs(car.rotation) > CRASH_ANGLE_THRESHOLD;
+        const isFullFlip = Math.abs(car.rotation) > SEVERE_FLIP_ANGLE;
+
+        if (headPenetration > 0 && (isFullFlip || (isSevereAngle && !inGracePeriod))) {
+            // Accumulate crash timer
+            this.crashGraceTimer += 1;
+
+            // Only crash after sustained bad position
+            if (this.crashGraceTimer > SUSTAINED_CRASH_FRAMES) {
+                this.gameOver('crash');
+                return;
+            }
+        } else {
+            this.crashGraceTimer = Math.max(0, this.crashGraceTimer - 0.5);  // Decay slowly
+        }
+
+        // Track bad landings for grace period
+        if (isGrounded && this.wasAirborne && Math.abs(car.rotation) > Math.PI / 4) {
+            this.lastBadLandingTime = performance.now();
         }
 
         // Fuel consumption - designed for 45-60 seconds of full-throttle driving
