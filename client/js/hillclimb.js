@@ -272,6 +272,10 @@ const HillClimbGame = {
         // Reset game state
         this.resetGame();
 
+        // Show garage on first launch
+        this.state.showGarage = true;
+        this.state.garageTab = 'vehicles';
+
         // Setup input
         this.setupInput();
 
@@ -306,7 +310,9 @@ const HillClimbGame = {
             gameOver: false,
             gameOverReason: '',
             paused: false,
-            showGarage: false
+            showGarage: false,
+            garageTab: 'vehicles',
+            selectedUpgrade: 'engine'
         };
 
         this.wheels = {
@@ -324,6 +330,10 @@ const HillClimbGame = {
 
         // Clear particles
         this.particles = [];
+
+        // Reset tracking variables
+        this.wasAirborne = false;
+        this.lastMilestone = 0;
 
         // Position car on ground
         this.state.car.y = this.getTerrainHeight(100) - 30;
@@ -518,7 +528,6 @@ const HillClimbGame = {
     },
 
     startFromGarage() {
-        this.state.showGarage = false;
         this.resetGame();
         this.state.showGarage = false;
     },
