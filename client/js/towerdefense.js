@@ -126,7 +126,7 @@ const TowerDefenseRenderer = {
                     { name: 'Mystic Reach', cost: 100, desc: '+35% range' },
                     { name: 'Enchantment', cost: 225, desc: '20% chance remove buffs' },
                     { name: 'Necromancer', cost: 550, desc: '30% kill = spawn skeleton', choice: 'A' },
-                    { name: 'Time Mage', cost: 550, desc: 'Slow attack speed 50%', choice: 'B' }
+                    { name: 'Lich Lord', cost: 550, desc: '50% kill = stronger skeletons', choice: 'B' }
                 ]
             }
         },
@@ -351,6 +351,7 @@ const TowerDefenseRenderer = {
                 }
             }
             if (e.key === 'f' || e.key === 'F') {
+                console.log('F key pressed - toggling fast forward');
                 socket.send('input', { action: 'toggleFastForward' });
             }
         });
@@ -2580,20 +2581,28 @@ const TowerDefenseRenderer = {
         for (let t = 0; t < 4; t++) {
             const tier = path.tiers[t];
             const tierY = y + t * tierHeight;
-            const tierNum = (t < 2) ? t + 1 : 3;
+            const displayTier = t + 1;  // 1, 2, 3, 4
             const isChoice = t >= 2;
-            const choiceLetter = isChoice ? tier.choice : '';
+            const choiceLetter = isChoice ? tier.choice : '';  // 'A' or 'B' for tier 3/4
 
             // Determine state
             let state = 'available';
-            if (isLocked && tierNum > 2) {
+            if (isLocked && displayTier > 2) {
                 state = 'locked';
-            } else if (tierNum <= currentTier) {
+            } else if (displayTier <= 2 && displayTier <= currentTier) {
+                // Tier 1 and 2: purchased if currentTier >= that tier
                 state = 'purchased';
-            } else if (tierNum === currentTier + 1) {
+            } else if (isChoice && currentTier >= 3) {
+                // Tier 3/4 choices: only the one that was actually chosen is purchased
+                if (tier3Choice === choiceLetter) {
+                    state = 'purchased';
+                } else {
+                    state = 'unavailable';  // Other choice is now unavailable
+                }
+            } else if (displayTier === currentTier + 1 || (isChoice && currentTier === 2)) {
+                // Next tier available, or tier 3/4 choices available when at tier 2
                 if (isChoice) {
                     if (currentTier < 2) state = 'unavailable';
-                    else if (tier3Choice !== '' && tier3Choice !== choiceLetter) state = 'unavailable';
                     else state = this.state.gold >= tier.cost ? 'available' : 'cantafford';
                 } else {
                     state = this.state.gold >= tier.cost ? 'available' : 'cantafford';
@@ -2633,7 +2642,8 @@ const TowerDefenseRenderer = {
             ctx.fillStyle = textColor;
             ctx.font = 'bold 10px sans-serif';
             ctx.textAlign = 'left';
-            const tierLabel = isChoice ? `T3${choiceLetter}` : `T${tierNum}`;
+            // T1, T2 for first two, then T3A/T4A for path A choices, T3B/T4B for path B choices
+            const tierLabel = isChoice ? `T${displayTier}${pathLetter}` : `T${displayTier}`;
             ctx.fillText(tierLabel, x + 5, tierY + 12);
 
             // Name

@@ -86,7 +86,7 @@ const std::array<std::array<std::array<TowerDefenseGame::UpgradeDef, 4>, 2>, 8> 
             {"Mystic Reach", 100, "+35% range"},
             {"Enchantment", 225, "20% chance to remove enemy buffs"},
             {"Necromancer", 550, "30% kill chance spawns skeleton"},
-            {"Time Mage", 550, "Slow enemy attack speed 50% for 3s"}
+            {"Lich Lord", 550, "50% kill chance spawns stronger skeletons"}
         }}
     }},
     // FROST
@@ -1979,6 +1979,18 @@ json TowerDefenseGame::upgradeStateToJson(const UpgradeState& state) const {
     j["pathBLocked"] = pathBLocked;
     j["pathAMax"] = pathALocked ? 2 : 4;
     j["pathBMax"] = pathBLocked ? 2 : 4;
+
+    // Send which tier 3 choice was made (if any)
+    std::string pathAChoice = "";
+    std::string pathBChoice = "";
+    if (state.pathATier == 3) {
+        pathAChoice = (state.pathATier3 == Tier3Choice::CHOICE_A) ? "A" : "B";
+    }
+    if (state.pathBTier == 3) {
+        pathBChoice = (state.pathBTier3 == Tier3Choice::CHOICE_A) ? "A" : "B";
+    }
+    j["pathAChoice"] = pathAChoice;
+    j["pathBChoice"] = pathBChoice;
 
     return j;
 }

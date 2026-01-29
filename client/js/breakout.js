@@ -28,9 +28,9 @@ const BreakoutGame = {
         bricksPerNewRow: 6,
         dangerZoneRows: 2,
         dropChances: {
-            multiball: 0.02,
-            extraLife: 0.01,
-            bomb: 0.02
+            multiball: 0.12,
+            extraLife: 0.06,
+            bomb: 0.10
         }
     },
 
