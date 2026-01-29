@@ -146,6 +146,9 @@ const Game = {
         } else if (type === 'agar') {
             this.renderer = AgarRenderer;
             this.renderer.init(canvas);
+        } else if (type === 'hillclimb') {
+            this.renderer = HillClimbGame;
+            this.renderer.init(canvas);
         }
 
         // Initialize in-game chat for all games except chat room
@@ -235,6 +238,9 @@ const Game = {
 
         if (type === 'breakout') {
             this.renderer = BreakoutGame;
+            this.renderer.init(canvas);
+        } else if (type === 'hillclimb') {
+            this.renderer = HillClimbGame;
             this.renderer.init(canvas);
         }
         // Add more single-player games here
