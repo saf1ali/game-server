@@ -369,14 +369,13 @@ const TowerDefenseRenderer = {
         for (const tower of this.state.towers) {
             const x = tower.x * cellSize + cellSize / 2;
             const y = tower.y * cellSize + cellSize / 2;
-            const color = this.TOWER_COLORS[tower.type] || '#888';
             const isSelected = this.selectedTower && this.selectedTower.id === tower.id;
             const showRange = this.showRangeFor === tower.id || isSelected;
 
             // Range indicator
             if (showRange) {
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
                 ctx.lineWidth = 2;
                 ctx.beginPath();
                 ctx.arc(x, y, tower.range, 0, Math.PI * 2);
@@ -384,26 +383,31 @@ const TowerDefenseRenderer = {
                 ctx.stroke();
             }
 
-            // Tower base
-            ctx.fillStyle = '#333';
-            ctx.beginPath();
-            ctx.arc(x, y, 18, 0, Math.PI * 2);
-            ctx.fill();
+            // Draw tower based on type
+            ctx.save();
+            ctx.translate(x, y);
 
-            // Tower body
-            ctx.fillStyle = color;
-            ctx.beginPath();
-            ctx.arc(x, y, 15, 0, Math.PI * 2);
-            ctx.fill();
+            switch (tower.type) {
+                case 'archer': this.drawArcherTower(ctx, tower); break;
+                case 'cannon': this.drawCannonTower(ctx, tower); break;
+                case 'mage': this.drawMageTower(ctx, tower); break;
+                case 'frost': this.drawFrostTower(ctx, tower); break;
+                case 'poison': this.drawPoisonTower(ctx, tower); break;
+                case 'lightning': this.drawLightningTower(ctx, tower); break;
+                case 'barracks': this.drawBarracksTower(ctx, tower); break;
+                case 'ultimate': this.drawUltimateTower(ctx, tower); break;
+                default: this.drawDefaultTower(ctx, tower); break;
+            }
 
-            // Level indicator
+            ctx.restore();
+
+            // Level stars
             if (tower.level > 0) {
                 ctx.fillStyle = '#ffd700';
+                ctx.font = 'bold 10px sans-serif';
+                ctx.textAlign = 'center';
                 for (let i = 0; i < tower.level; i++) {
-                    const starX = x - 10 + i * 10;
-                    const starY = y - 20;
-                    ctx.font = '10px sans-serif';
-                    ctx.fillText('★', starX, starY);
+                    ctx.fillText('★', x - 8 + i * 8, y - 20);
                 }
             }
 
@@ -411,76 +415,1464 @@ const TowerDefenseRenderer = {
             if (isSelected) {
                 ctx.strokeStyle = '#fff';
                 ctx.lineWidth = 3;
+                ctx.setLineDash([5, 5]);
                 ctx.beginPath();
-                ctx.arc(x, y, 22, 0, Math.PI * 2);
+                ctx.arc(x, y, 24, 0, Math.PI * 2);
                 ctx.stroke();
+                ctx.setLineDash([]);
             }
-
-            // Tower type letter
-            ctx.fillStyle = '#fff';
-            ctx.font = 'bold 14px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText(tower.type[0].toUpperCase(), x, y + 5);
         }
+    },
+
+    // Archer Tower - Wooden platform with archer figure
+    drawArcherTower(ctx, tower) {
+        const level = tower.level;
+
+        // Wooden base platform
+        ctx.fillStyle = '#5d4037';
+        ctx.fillRect(-16, -8, 32, 20);
+        ctx.fillStyle = '#4e342e';
+        ctx.fillRect(-14, -6, 28, 16);
+
+        // Wooden supports
+        ctx.fillStyle = '#6d4c41';
+        ctx.fillRect(-18, 4, 6, 12);
+        ctx.fillRect(12, 4, 6, 12);
+
+        // Archer body (green tunic)
+        ctx.fillStyle = level >= 2 ? '#2e7d32' : '#4CAF50';
+        ctx.beginPath();
+        ctx.ellipse(0, -4, 6, 8, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Archer head
+        ctx.fillStyle = '#ffcc80';
+        ctx.beginPath();
+        ctx.arc(0, -14, 5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Hood/hat
+        ctx.fillStyle = level >= 2 ? '#1b5e20' : '#388e3c';
+        ctx.beginPath();
+        ctx.arc(0, -16, 4, Math.PI, 0);
+        ctx.fill();
+
+        // Bow
+        ctx.strokeStyle = '#8d6e63';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(8, -8, 10, -Math.PI * 0.6, Math.PI * 0.6);
+        ctx.stroke();
+
+        // Bowstring
+        ctx.strokeStyle = '#e0e0e0';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(8, -16);
+        ctx.lineTo(8, 0);
+        ctx.stroke();
+
+        // Level 3: Arrow quiver
+        if (level >= 3) {
+            ctx.fillStyle = '#5d4037';
+            ctx.fillRect(-10, -10, 4, 12);
+            ctx.fillStyle = '#8d6e63';
+            ctx.fillRect(-9, -14, 2, 6);
+            ctx.fillRect(-9, -14, 2, 6);
+        }
+    },
+
+    // Cannon Tower - Stone platform with rotating barrel
+    drawCannonTower(ctx, tower) {
+        const level = tower.level;
+        const time = Date.now() / 1000;
+
+        // Stone base (circular platform)
+        ctx.fillStyle = '#546e7a';
+        ctx.beginPath();
+        ctx.arc(0, 4, 18, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#455a64';
+        ctx.beginPath();
+        ctx.arc(0, 2, 16, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Brick pattern
+        ctx.strokeStyle = '#37474f';
+        ctx.lineWidth = 1;
+        for (let i = -12; i <= 12; i += 8) {
+            ctx.beginPath();
+            ctx.moveTo(i, -8);
+            ctx.lineTo(i, 10);
+            ctx.stroke();
+        }
+
+        // Cannon body
+        const cannonColor = level >= 2 ? '#4a4a4a' : '#616161';
+        ctx.fillStyle = cannonColor;
+        ctx.fillRect(-6, -16, 12, 20);
+
+        // Cannon barrel
+        ctx.fillStyle = level >= 3 ? '#b71c1c' : '#424242';
+        ctx.beginPath();
+        ctx.moveTo(-4, -16);
+        ctx.lineTo(-6, -24);
+        ctx.lineTo(6, -24);
+        ctx.lineTo(4, -16);
+        ctx.fill();
+
+        // Cannon wheel (left)
+        ctx.fillStyle = '#5d4037';
+        ctx.beginPath();
+        ctx.arc(-10, 6, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#3e2723';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Cannon wheel (right)
+        ctx.beginPath();
+        ctx.arc(10, 6, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Cannonball stack (level 3)
+        if (level >= 3) {
+            ctx.fillStyle = '#212121';
+            ctx.beginPath();
+            ctx.arc(-14, -4, 3, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(-10, -4, 3, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(-12, -8, 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    },
+
+    // Mage Tower - Crystal spire with floating orb
+    drawMageTower(ctx, tower) {
+        const level = tower.level;
+        const time = Date.now() / 1000;
+        const pulse = Math.sin(time * 3) * 0.2 + 0.8;
+
+        // Base platform (mystical stone)
+        ctx.fillStyle = '#4a148c';
+        ctx.beginPath();
+        ctx.moveTo(-16, 10);
+        ctx.lineTo(-12, -2);
+        ctx.lineTo(12, -2);
+        ctx.lineTo(16, 10);
+        ctx.closePath();
+        ctx.fill();
+
+        // Spire body
+        const gradient = ctx.createLinearGradient(0, -20, 0, 10);
+        gradient.addColorStop(0, '#7b1fa2');
+        gradient.addColorStop(1, '#4a148c');
+        ctx.fillStyle = gradient;
+
+        ctx.beginPath();
+        ctx.moveTo(-8, 8);
+        ctx.lineTo(-4, -18);
+        ctx.lineTo(4, -18);
+        ctx.lineTo(8, 8);
+        ctx.closePath();
+        ctx.fill();
+
+        // Spire tip
+        ctx.fillStyle = '#9c27b0';
+        ctx.beginPath();
+        ctx.moveTo(-4, -18);
+        ctx.lineTo(0, -26);
+        ctx.lineTo(4, -18);
+        ctx.closePath();
+        ctx.fill();
+
+        // Floating orb
+        const orbY = -10 + Math.sin(time * 2) * 3;
+        const orbSize = 6 * pulse;
+
+        // Orb glow
+        ctx.fillStyle = `rgba(186, 104, 200, ${0.3 * pulse})`;
+        ctx.beginPath();
+        ctx.arc(0, orbY, orbSize + 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Orb
+        ctx.fillStyle = level >= 2 ? '#e040fb' : '#ce93d8';
+        ctx.beginPath();
+        ctx.arc(0, orbY, orbSize, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Orb highlight
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(-2, orbY - 2, 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Magic runes (level 3)
+        if (level >= 3) {
+            ctx.strokeStyle = '#e1bee7';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(0, 6, 10, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+    },
+
+    // Frost Tower - Ice crystal formation
+    drawFrostTower(ctx, tower) {
+        const level = tower.level;
+        const time = Date.now() / 1000;
+
+        // Ice base
+        ctx.fillStyle = '#4dd0e1';
+        ctx.globalAlpha = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(-14, 12);
+        ctx.lineTo(-10, 0);
+        ctx.lineTo(10, 0);
+        ctx.lineTo(14, 12);
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        // Main ice crystal
+        const crystalGradient = ctx.createLinearGradient(0, -24, 0, 8);
+        crystalGradient.addColorStop(0, '#e0f7fa');
+        crystalGradient.addColorStop(0.5, '#80deea');
+        crystalGradient.addColorStop(1, '#00bcd4');
+        ctx.fillStyle = crystalGradient;
+
+        ctx.beginPath();
+        ctx.moveTo(0, -24);
+        ctx.lineTo(-8, 0);
+        ctx.lineTo(0, 8);
+        ctx.lineTo(8, 0);
+        ctx.closePath();
+        ctx.fill();
+
+        // Crystal shine
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+        ctx.beginPath();
+        ctx.moveTo(-2, -20);
+        ctx.lineTo(-4, -8);
+        ctx.lineTo(-1, -8);
+        ctx.lineTo(0, -18);
+        ctx.closePath();
+        ctx.fill();
+
+        // Side crystals
+        ctx.fillStyle = '#4dd0e1';
+        // Left crystal
+        ctx.beginPath();
+        ctx.moveTo(-12, 4);
+        ctx.lineTo(-16, -8);
+        ctx.lineTo(-8, -4);
+        ctx.closePath();
+        ctx.fill();
+
+        // Right crystal
+        ctx.beginPath();
+        ctx.moveTo(12, 4);
+        ctx.lineTo(16, -8);
+        ctx.lineTo(8, -4);
+        ctx.closePath();
+        ctx.fill();
+
+        // Cold aura particles (level 2+)
+        if (level >= 2) {
+            ctx.fillStyle = 'rgba(224, 247, 250, 0.6)';
+            for (let i = 0; i < 5; i++) {
+                const angle = (time + i * 1.2) % (Math.PI * 2);
+                const dist = 16 + Math.sin(time * 2 + i) * 4;
+                const px = Math.cos(angle) * dist;
+                const py = Math.sin(angle) * dist - 4;
+                ctx.beginPath();
+                ctx.arc(px, py, 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+    },
+
+    // Poison Tower - Bubbling cauldron
+    drawPoisonTower(ctx, tower) {
+        const level = tower.level;
+        const time = Date.now() / 1000;
+
+        // Cauldron base
+        ctx.fillStyle = '#37474f';
+        ctx.beginPath();
+        ctx.ellipse(0, 8, 16, 8, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Cauldron body
+        ctx.fillStyle = '#455a64';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 14, 12, 0, 0, Math.PI);
+        ctx.fill();
+
+        // Cauldron rim
+        ctx.fillStyle = '#546e7a';
+        ctx.beginPath();
+        ctx.ellipse(0, -2, 14, 4, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Poison liquid
+        ctx.fillStyle = level >= 2 ? '#76ff03' : '#8bc34a';
+        ctx.beginPath();
+        ctx.ellipse(0, -2, 12, 3, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Bubbles
+        ctx.fillStyle = '#c5e1a5';
+        const bubbleCount = level >= 3 ? 6 : 4;
+        for (let i = 0; i < bubbleCount; i++) {
+            const bx = Math.sin(time * 2 + i * 1.5) * 8;
+            const by = -4 - ((time * 20 + i * 15) % 12);
+            const bs = 2 + Math.sin(time + i) * 1;
+            ctx.globalAlpha = 1 - (by + 16) / 12 * 0.7;
+            ctx.beginPath();
+            ctx.arc(bx, by, bs, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+
+        // Poison drips (level 3)
+        if (level >= 3) {
+            ctx.fillStyle = '#8bc34a';
+            const dripY = (time * 30) % 20;
+            ctx.beginPath();
+            ctx.ellipse(-10, 8 + dripY, 2, 3, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Skull decoration
+        ctx.fillStyle = '#e0e0e0';
+        ctx.beginPath();
+        ctx.arc(0, 4, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#37474f';
+        ctx.beginPath();
+        ctx.arc(-2, 3, 1.5, 0, Math.PI * 2);
+        ctx.arc(2, 3, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+    },
+
+    // Lightning Tower - Tesla coil with electric arcs
+    drawLightningTower(ctx, tower) {
+        const level = tower.level;
+        const time = Date.now() / 1000;
+
+        // Metal base
+        ctx.fillStyle = '#546e7a';
+        ctx.fillRect(-12, 4, 24, 12);
+
+        // Base detail
+        ctx.fillStyle = '#78909c';
+        ctx.fillRect(-10, 6, 20, 4);
+
+        // Central coil post
+        ctx.fillStyle = '#455a64';
+        ctx.fillRect(-4, -20, 8, 28);
+
+        // Coil rings
+        ctx.strokeStyle = '#ff9800';
+        ctx.lineWidth = 3;
+        for (let i = 0; i < 4; i++) {
+            ctx.beginPath();
+            ctx.ellipse(0, -4 - i * 5, 8, 3, 0, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+
+        // Top sphere
+        ctx.fillStyle = level >= 2 ? '#ffc107' : '#ffeb3b';
+        ctx.beginPath();
+        ctx.arc(0, -22, 6, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Electric glow
+        ctx.fillStyle = 'rgba(255, 235, 59, 0.3)';
+        ctx.beginPath();
+        ctx.arc(0, -22, 10, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Lightning arcs
+        ctx.strokeStyle = '#ffeb3b';
+        ctx.lineWidth = 2;
+        const arcCount = level >= 3 ? 4 : 2;
+        for (let i = 0; i < arcCount; i++) {
+            const angle = (time * 3 + i * Math.PI / 2) % (Math.PI * 2);
+            ctx.beginPath();
+            ctx.moveTo(0, -22);
+            const midX = Math.cos(angle) * 12 + (Math.random() - 0.5) * 4;
+            const midY = -22 + Math.sin(angle) * 10 + (Math.random() - 0.5) * 4;
+            ctx.lineTo(midX, midY);
+            ctx.lineTo(midX + (Math.random() - 0.5) * 8, midY + 8);
+            ctx.stroke();
+        }
+    },
+
+    // Barracks Tower - Small fort with knight
+    drawBarracksTower(ctx, tower) {
+        const level = tower.level;
+
+        // Fort base (stone wall)
+        ctx.fillStyle = '#5d4037';
+        ctx.fillRect(-18, -4, 36, 20);
+
+        // Battlements
+        ctx.fillStyle = '#4e342e';
+        for (let i = -16; i <= 12; i += 8) {
+            ctx.fillRect(i, -12, 6, 8);
+        }
+
+        // Door
+        ctx.fillStyle = '#3e2723';
+        ctx.beginPath();
+        ctx.moveTo(-6, 16);
+        ctx.lineTo(-6, 4);
+        ctx.arc(0, 4, 6, Math.PI, 0);
+        ctx.lineTo(6, 16);
+        ctx.fill();
+
+        // Knight figure
+        // Body armor
+        ctx.fillStyle = level >= 2 ? '#c0c0c0' : '#9e9e9e';
+        ctx.fillRect(-4, -8, 8, 12);
+
+        // Helmet
+        ctx.fillStyle = level >= 2 ? '#bdbdbd' : '#757575';
+        ctx.beginPath();
+        ctx.arc(0, -12, 5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Helmet visor
+        ctx.fillStyle = '#424242';
+        ctx.fillRect(-3, -12, 6, 2);
+
+        // Shield
+        ctx.fillStyle = level >= 3 ? '#f44336' : '#795548';
+        ctx.beginPath();
+        ctx.moveTo(-10, -6);
+        ctx.lineTo(-10, 4);
+        ctx.lineTo(-6, 8);
+        ctx.lineTo(-6, -6);
+        ctx.closePath();
+        ctx.fill();
+
+        // Sword
+        ctx.fillStyle = '#bdbdbd';
+        ctx.fillRect(6, -16, 2, 20);
+        ctx.fillStyle = '#5d4037';
+        ctx.fillRect(4, -4, 6, 2);
+
+        // Banner (level 3)
+        if (level >= 3) {
+            ctx.fillStyle = '#f44336';
+            ctx.beginPath();
+            ctx.moveTo(14, -16);
+            ctx.lineTo(14, -4);
+            ctx.lineTo(20, -10);
+            ctx.closePath();
+            ctx.fill();
+        }
+    },
+
+    // Ultimate Tower - Grand tower with golden glow
+    drawUltimateTower(ctx, tower) {
+        const level = tower.level;
+        const time = Date.now() / 1000;
+        const pulse = Math.sin(time * 2) * 0.15 + 0.85;
+
+        // Golden aura
+        ctx.fillStyle = `rgba(255, 215, 0, ${0.2 * pulse})`;
+        ctx.beginPath();
+        ctx.arc(0, -4, 28, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Grand base
+        const baseGradient = ctx.createLinearGradient(-18, 0, 18, 0);
+        baseGradient.addColorStop(0, '#5d4037');
+        baseGradient.addColorStop(0.5, '#8d6e63');
+        baseGradient.addColorStop(1, '#5d4037');
+        ctx.fillStyle = baseGradient;
+        ctx.fillRect(-18, 4, 36, 14);
+
+        // Tower body
+        const towerGradient = ctx.createLinearGradient(0, -24, 0, 8);
+        towerGradient.addColorStop(0, '#ffd54f');
+        towerGradient.addColorStop(0.5, '#e91e63');
+        towerGradient.addColorStop(1, '#880e4f');
+        ctx.fillStyle = towerGradient;
+
+        ctx.beginPath();
+        ctx.moveTo(-12, 8);
+        ctx.lineTo(-8, -16);
+        ctx.lineTo(8, -16);
+        ctx.lineTo(12, 8);
+        ctx.closePath();
+        ctx.fill();
+
+        // Tower top
+        ctx.fillStyle = '#ffd700';
+        ctx.beginPath();
+        ctx.moveTo(-8, -16);
+        ctx.lineTo(0, -28);
+        ctx.lineTo(8, -16);
+        ctx.closePath();
+        ctx.fill();
+
+        // Crown jewel
+        ctx.fillStyle = '#ff1744';
+        ctx.beginPath();
+        ctx.arc(0, -20, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Jewel glow
+        ctx.fillStyle = 'rgba(255, 23, 68, 0.4)';
+        ctx.beginPath();
+        ctx.arc(0, -20, 6 * pulse, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Side ornaments
+        ctx.fillStyle = '#ffd700';
+        ctx.beginPath();
+        ctx.arc(-14, -2, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(14, -2, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Energy particles (level 2+)
+        if (level >= 2) {
+            ctx.fillStyle = '#ffd700';
+            for (let i = 0; i < 6; i++) {
+                const angle = time * 2 + i * Math.PI / 3;
+                const dist = 20 + Math.sin(time * 3 + i) * 3;
+                const px = Math.cos(angle) * dist;
+                const py = Math.sin(angle) * dist - 8;
+                ctx.globalAlpha = 0.7 + Math.sin(time * 4 + i) * 0.3;
+                ctx.beginPath();
+                ctx.arc(px, py, 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.globalAlpha = 1;
+        }
+    },
+
+    // Default tower fallback
+    drawDefaultTower(ctx, tower) {
+        const color = this.TOWER_COLORS[tower.type] || '#888';
+        ctx.fillStyle = '#333';
+        ctx.beginPath();
+        ctx.arc(0, 0, 18, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(0, 0, 15, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(tower.type[0].toUpperCase(), 0, 5);
     },
 
     renderEnemies() {
         const ctx = this.ctx;
+        const time = Date.now() / 1000;
 
         for (const enemy of this.state.enemies) {
-            const color = this.ENEMY_COLORS[enemy.type] || '#888';
+            ctx.save();
+            ctx.translate(enemy.x, enemy.y);
 
-            // Enemy body
-            ctx.fillStyle = color;
-            ctx.beginPath();
-            if (enemy.flying) {
-                // Flying enemies are triangles
-                ctx.moveTo(enemy.x, enemy.y - 12);
-                ctx.lineTo(enemy.x - 10, enemy.y + 8);
-                ctx.lineTo(enemy.x + 10, enemy.y + 8);
-                ctx.closePath();
-            } else {
-                // Ground enemies are circles
-                ctx.arc(enemy.x, enemy.y, 10, 0, Math.PI * 2);
+            // Walking bob animation
+            const bobAmount = enemy.flying ? 0 : Math.sin(time * 10 + enemy.id) * 2;
+            ctx.translate(0, bobAmount);
+
+            // Camo effect (semi-transparent)
+            if (enemy.camo) {
+                ctx.globalAlpha = 0.5 + Math.sin(time * 3) * 0.2;
             }
+
+            // Draw enemy based on type
+            switch (enemy.type) {
+                case 'goblin': this.drawGoblin(ctx, enemy); break;
+                case 'orc': this.drawOrc(ctx, enemy); break;
+                case 'orc_brute': this.drawOrcBrute(ctx, enemy); break;
+                case 'wolf_rider': this.drawWolfRider(ctx, enemy); break;
+                case 'troll': this.drawTroll(ctx, enemy, time); break;
+                case 'dark_mage': this.drawDarkMage(ctx, enemy, time); break;
+                case 'bat': this.drawBatSwarm(ctx, enemy, time); break;
+                case 'wyvern': this.drawWyvern(ctx, enemy, time); break;
+                case 'golem': this.drawGolem(ctx, enemy); break;
+                case 'assassin': this.drawAssassin(ctx, enemy); break;
+                case 'necromancer': this.drawNecromancer(ctx, enemy, time); break;
+                case 'dragon': this.drawDragon(ctx, enemy, time); break;
+                case 'giant': this.drawGiant(ctx, enemy); break;
+                case 'demon_knight': this.drawDemonKnight(ctx, enemy); break;
+                case 'demon_king': this.drawDemonKing(ctx, enemy, time); break;
+                default: this.drawDefaultEnemy(ctx, enemy); break;
+            }
+
+            ctx.globalAlpha = 1;
+            ctx.restore();
+
+            // Health bar (outside transform)
+            this.drawEnemyHealthBar(ctx, enemy);
+
+            // Effect indicators
+            this.drawEnemyEffects(ctx, enemy);
+        }
+    },
+
+    drawEnemyHealthBar(ctx, enemy) {
+        const hpPercent = enemy.hp / enemy.maxHp;
+        const isBoss = ['dragon', 'giant', 'demon_knight', 'demon_king'].includes(enemy.type);
+        const barWidth = isBoss ? 40 : 24;
+        const barHeight = isBoss ? 6 : 4;
+        const barX = enemy.x - barWidth / 2;
+        const barY = enemy.y - (isBoss ? 28 : 18);
+
+        // Background
+        ctx.fillStyle = '#1a1a1a';
+        ctx.fillRect(barX - 1, barY - 1, barWidth + 2, barHeight + 2);
+
+        // Health gradient
+        const healthColor = hpPercent > 0.6 ? '#4CAF50' : hpPercent > 0.3 ? '#FF9800' : '#f44336';
+        ctx.fillStyle = healthColor;
+        ctx.fillRect(barX, barY, barWidth * hpPercent, barHeight);
+
+        // Boss outline
+        if (isBoss) {
+            ctx.strokeStyle = '#ffd700';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(barX - 1, barY - 1, barWidth + 2, barHeight + 2);
+        }
+    },
+
+    drawEnemyEffects(ctx, enemy) {
+        if (!enemy.effects || enemy.effects.length === 0) return;
+
+        let effectX = enemy.x - (enemy.effects.length - 1) * 4;
+        for (const effect of enemy.effects) {
+            // 0=SLOW, 1=POISON, 2=BURN
+            const colors = ['#00BCD4', '#8BC34A', '#FF5722'];
+            ctx.fillStyle = colors[effect] || '#fff';
+            ctx.beginPath();
+            ctx.arc(effectX, enemy.y + 14, 3, 0, Math.PI * 2);
+            ctx.fill();
+            effectX += 8;
+        }
+    },
+
+    // Goblin - Small green creature
+    drawGoblin(ctx, enemy) {
+        // Body
+        ctx.fillStyle = '#7CB342';
+        ctx.beginPath();
+        ctx.ellipse(0, 2, 6, 8, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Head
+        ctx.fillStyle = '#8BC34A';
+        ctx.beginPath();
+        ctx.arc(0, -8, 5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Pointy ears
+        ctx.fillStyle = '#7CB342';
+        ctx.beginPath();
+        ctx.moveTo(-5, -10);
+        ctx.lineTo(-9, -14);
+        ctx.lineTo(-4, -8);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(5, -10);
+        ctx.lineTo(9, -14);
+        ctx.lineTo(4, -8);
+        ctx.fill();
+
+        // Eyes
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(-2, -9, 2, 0, Math.PI * 2);
+        ctx.arc(2, -9, 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#000';
+        ctx.beginPath();
+        ctx.arc(-2, -9, 1, 0, Math.PI * 2);
+        ctx.arc(2, -9, 1, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Small dagger
+        ctx.fillStyle = '#9e9e9e';
+        ctx.fillRect(6, -2, 2, 8);
+    },
+
+    // Orc - Large muscular figure
+    drawOrc(ctx, enemy) {
+        // Body
+        ctx.fillStyle = '#5D4037';
+        ctx.beginPath();
+        ctx.ellipse(0, 2, 8, 10, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Head
+        ctx.fillStyle = '#6D4C41';
+        ctx.beginPath();
+        ctx.arc(0, -10, 7, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Jaw
+        ctx.fillStyle = '#5D4037';
+        ctx.beginPath();
+        ctx.arc(0, -6, 5, 0, Math.PI);
+        ctx.fill();
+
+        // Tusks
+        ctx.fillStyle = '#e0e0e0';
+        ctx.beginPath();
+        ctx.moveTo(-4, -5);
+        ctx.lineTo(-6, -1);
+        ctx.lineTo(-3, -3);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(4, -5);
+        ctx.lineTo(6, -1);
+        ctx.lineTo(3, -3);
+        ctx.fill();
+
+        // Eyes
+        ctx.fillStyle = '#ff5722';
+        ctx.beginPath();
+        ctx.arc(-3, -11, 2, 0, Math.PI * 2);
+        ctx.arc(3, -11, 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Weapon (axe)
+        ctx.fillStyle = '#5d4037';
+        ctx.fillRect(10, -8, 3, 16);
+        ctx.fillStyle = '#757575';
+        ctx.beginPath();
+        ctx.moveTo(10, -8);
+        ctx.lineTo(18, -4);
+        ctx.lineTo(18, 2);
+        ctx.lineTo(10, 0);
+        ctx.fill();
+    },
+
+    // Orc Brute - Heavy armored orc
+    drawOrcBrute(ctx, enemy) {
+        // Armor body
+        ctx.fillStyle = '#3E2723';
+        ctx.beginPath();
+        ctx.ellipse(0, 2, 10, 12, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Armor plates
+        ctx.fillStyle = '#4e342e';
+        ctx.fillRect(-8, -4, 16, 12);
+        ctx.strokeStyle = '#5d4037';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(-8, -4, 16, 12);
+
+        // Head with helmet
+        ctx.fillStyle = '#5d4037';
+        ctx.beginPath();
+        ctx.arc(0, -10, 8, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Helmet
+        ctx.fillStyle = '#424242';
+        ctx.beginPath();
+        ctx.arc(0, -12, 7, Math.PI, 0);
+        ctx.fill();
+
+        // Eye slits
+        ctx.fillStyle = '#ff5722';
+        ctx.fillRect(-5, -11, 4, 2);
+        ctx.fillRect(1, -11, 4, 2);
+
+        // Spikes
+        ctx.fillStyle = '#616161';
+        ctx.beginPath();
+        ctx.moveTo(-6, -18);
+        ctx.lineTo(-4, -12);
+        ctx.lineTo(-8, -12);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(6, -18);
+        ctx.lineTo(4, -12);
+        ctx.lineTo(8, -12);
+        ctx.fill();
+    },
+
+    // Wolf Rider - Orc on wolf
+    drawWolfRider(ctx, enemy) {
+        // Wolf body
+        ctx.fillStyle = '#616161';
+        ctx.beginPath();
+        ctx.ellipse(0, 6, 12, 6, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Wolf head
+        ctx.fillStyle = '#757575';
+        ctx.beginPath();
+        ctx.ellipse(10, 2, 6, 5, -0.3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Wolf ears
+        ctx.beginPath();
+        ctx.moveTo(8, -2);
+        ctx.lineTo(6, -8);
+        ctx.lineTo(10, -4);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(12, -2);
+        ctx.lineTo(14, -8);
+        ctx.lineTo(12, -4);
+        ctx.fill();
+
+        // Orc rider
+        ctx.fillStyle = '#5D4037';
+        ctx.beginPath();
+        ctx.ellipse(-2, -4, 5, 6, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Rider head
+        ctx.fillStyle = '#6D4C41';
+        ctx.beginPath();
+        ctx.arc(-2, -12, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Spear
+        ctx.fillStyle = '#5d4037';
+        ctx.fillRect(4, -18, 2, 20);
+        ctx.fillStyle = '#9e9e9e';
+        ctx.beginPath();
+        ctx.moveTo(4, -18);
+        ctx.lineTo(5, -24);
+        ctx.lineTo(6, -18);
+        ctx.fill();
+    },
+
+    // Troll - Regenerating monster
+    drawTroll(ctx, enemy, time) {
+        // Large body
+        ctx.fillStyle = '#2E7D32';
+        ctx.beginPath();
+        ctx.ellipse(0, 4, 12, 14, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Head
+        ctx.fillStyle = '#388E3C';
+        ctx.beginPath();
+        ctx.arc(0, -12, 8, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Warts
+        ctx.fillStyle = '#1B5E20';
+        ctx.beginPath();
+        ctx.arc(-4, -14, 2, 0, Math.PI * 2);
+        ctx.arc(5, -10, 2, 0, Math.PI * 2);
+        ctx.arc(-6, 0, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Eyes
+        ctx.fillStyle = '#ffeb3b';
+        ctx.beginPath();
+        ctx.arc(-3, -13, 3, 0, Math.PI * 2);
+        ctx.arc(3, -13, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#000';
+        ctx.beginPath();
+        ctx.arc(-3, -13, 1.5, 0, Math.PI * 2);
+        ctx.arc(3, -13, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Regeneration sparkles
+        if (enemy.hp < enemy.maxHp) {
+            ctx.fillStyle = '#76ff03';
+            for (let i = 0; i < 3; i++) {
+                const angle = time * 3 + i * 2;
+                const px = Math.cos(angle) * 14;
+                const py = Math.sin(angle) * 14;
+                ctx.globalAlpha = 0.5 + Math.sin(time * 5 + i) * 0.3;
+                ctx.beginPath();
+                ctx.arc(px, py, 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.globalAlpha = 1;
+        }
+    },
+
+    // Dark Mage - Hooded spellcaster
+    drawDarkMage(ctx, enemy, time) {
+        // Robe
+        ctx.fillStyle = '#4A148C';
+        ctx.beginPath();
+        ctx.moveTo(-8, 12);
+        ctx.lineTo(-6, -4);
+        ctx.lineTo(6, -4);
+        ctx.lineTo(8, 12);
+        ctx.closePath();
+        ctx.fill();
+
+        // Hood
+        ctx.fillStyle = '#311B92';
+        ctx.beginPath();
+        ctx.arc(0, -8, 8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(-8, -8);
+        ctx.lineTo(0, -18);
+        ctx.lineTo(8, -8);
+        ctx.fill();
+
+        // Face shadow
+        ctx.fillStyle = '#1A0033';
+        ctx.beginPath();
+        ctx.ellipse(0, -6, 5, 6, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Glowing eyes
+        ctx.fillStyle = '#e040fb';
+        ctx.beginPath();
+        ctx.arc(-2, -7, 2, 0, Math.PI * 2);
+        ctx.arc(2, -7, 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Magic orb
+        const orbPulse = Math.sin(time * 4) * 0.3 + 0.7;
+        ctx.fillStyle = `rgba(156, 39, 176, ${orbPulse})`;
+        ctx.beginPath();
+        ctx.arc(10, -2, 5, 0, Math.PI * 2);
+        ctx.fill();
+    },
+
+    // Bat Swarm - Multiple small bats
+    drawBatSwarm(ctx, enemy, time) {
+        ctx.fillStyle = '#424242';
+        for (let i = 0; i < 5; i++) {
+            const offsetX = Math.sin(time * 8 + i * 1.5) * 8;
+            const offsetY = Math.cos(time * 6 + i * 1.2) * 6;
+
+            ctx.save();
+            ctx.translate(offsetX, offsetY);
+
+            // Bat body
+            ctx.beginPath();
+            ctx.ellipse(0, 0, 4, 3, 0, 0, Math.PI * 2);
             ctx.fill();
 
-            // Camo indicator
-            if (enemy.camo) {
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-                ctx.lineWidth = 2;
-                ctx.setLineDash([3, 3]);
-                ctx.stroke();
-                ctx.setLineDash([]);
-            }
+            // Wings
+            const wingFlap = Math.sin(time * 20 + i) * 0.5;
+            ctx.beginPath();
+            ctx.moveTo(-3, 0);
+            ctx.quadraticCurveTo(-8, -4 + wingFlap * 4, -10, 2);
+            ctx.lineTo(-3, 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(3, 0);
+            ctx.quadraticCurveTo(8, -4 + wingFlap * 4, 10, 2);
+            ctx.lineTo(3, 2);
+            ctx.fill();
 
-            // Health bar
-            const hpPercent = enemy.hp / enemy.maxHp;
-            const barWidth = 24;
-            const barHeight = 4;
-            const barX = enemy.x - barWidth / 2;
-            const barY = enemy.y - 18;
-
-            // Background
-            ctx.fillStyle = '#333';
-            ctx.fillRect(barX, barY, barWidth, barHeight);
-
-            // Health
-            ctx.fillStyle = hpPercent > 0.5 ? '#4CAF50' : hpPercent > 0.25 ? '#FF9800' : '#f44336';
-            ctx.fillRect(barX, barY, barWidth * hpPercent, barHeight);
-
-            // Effects indicators
-            if (enemy.effects && enemy.effects.length > 0) {
-                let effectX = enemy.x - 8;
-                for (const effect of enemy.effects) {
-                    ctx.fillStyle = effect === 0 ? '#00BCD4' : effect === 1 ? '#8BC34A' : '#FF5722';
-                    ctx.beginPath();
-                    ctx.arc(effectX, enemy.y + 14, 3, 0, Math.PI * 2);
-                    ctx.fill();
-                    effectX += 8;
-                }
-            }
+            ctx.restore();
         }
+    },
+
+    // Wyvern - Flying dragon-like creature
+    drawWyvern(ctx, enemy, time) {
+        const wingFlap = Math.sin(time * 8) * 0.4;
+
+        // Body
+        ctx.fillStyle = '#1565C0';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 10, 6, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Head
+        ctx.fillStyle = '#1976D2';
+        ctx.beginPath();
+        ctx.ellipse(10, -4, 6, 4, -0.3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Snout
+        ctx.beginPath();
+        ctx.moveTo(14, -4);
+        ctx.lineTo(20, -2);
+        ctx.lineTo(14, 0);
+        ctx.fill();
+
+        // Wings
+        ctx.fillStyle = '#0D47A1';
+        ctx.save();
+        ctx.rotate(wingFlap);
+        ctx.beginPath();
+        ctx.moveTo(-4, -2);
+        ctx.quadraticCurveTo(-14, -20, -20, -8);
+        ctx.lineTo(-8, 0);
+        ctx.fill();
+        ctx.restore();
+
+        ctx.save();
+        ctx.rotate(-wingFlap);
+        ctx.beginPath();
+        ctx.moveTo(4, -2);
+        ctx.quadraticCurveTo(14, -20, 20, -8);
+        ctx.lineTo(8, 0);
+        ctx.fill();
+        ctx.restore();
+
+        // Tail
+        ctx.beginPath();
+        ctx.moveTo(-8, 2);
+        ctx.quadraticCurveTo(-16, 8, -18, 4);
+        ctx.lineTo(-10, 0);
+        ctx.fill();
+
+        // Eye
+        ctx.fillStyle = '#ffeb3b';
+        ctx.beginPath();
+        ctx.arc(12, -5, 2, 0, Math.PI * 2);
+        ctx.fill();
+    },
+
+    // Golem - Magic immune stone creature
+    drawGolem(ctx, enemy) {
+        // Body (rocky)
+        ctx.fillStyle = '#78909C';
+        ctx.beginPath();
+        ctx.moveTo(-10, 12);
+        ctx.lineTo(-12, 0);
+        ctx.lineTo(-8, -8);
+        ctx.lineTo(8, -8);
+        ctx.lineTo(12, 0);
+        ctx.lineTo(10, 12);
+        ctx.closePath();
+        ctx.fill();
+
+        // Rock texture lines
+        ctx.strokeStyle = '#546e7a';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(-6, -4);
+        ctx.lineTo(-4, 8);
+        ctx.moveTo(2, -6);
+        ctx.lineTo(6, 6);
+        ctx.stroke();
+
+        // Head
+        ctx.fillStyle = '#90A4AE';
+        ctx.beginPath();
+        ctx.moveTo(-8, -8);
+        ctx.lineTo(-4, -18);
+        ctx.lineTo(4, -18);
+        ctx.lineTo(8, -8);
+        ctx.closePath();
+        ctx.fill();
+
+        // Glowing rune eyes
+        ctx.fillStyle = '#00bcd4';
+        ctx.beginPath();
+        ctx.arc(-3, -12, 3, 0, Math.PI * 2);
+        ctx.arc(3, -12, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Magic immunity aura
+        ctx.strokeStyle = 'rgba(0, 188, 212, 0.3)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(0, 0, 16, 0, Math.PI * 2);
+        ctx.stroke();
+    },
+
+    // Assassin - Camo enemy
+    drawAssassin(ctx, enemy) {
+        // Cloak
+        ctx.fillStyle = '#37474F';
+        ctx.beginPath();
+        ctx.moveTo(-6, 10);
+        ctx.lineTo(-8, -2);
+        ctx.lineTo(0, -6);
+        ctx.lineTo(8, -2);
+        ctx.lineTo(6, 10);
+        ctx.closePath();
+        ctx.fill();
+
+        // Hood
+        ctx.fillStyle = '#263238';
+        ctx.beginPath();
+        ctx.arc(0, -8, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(-6, -8);
+        ctx.lineTo(0, -16);
+        ctx.lineTo(6, -8);
+        ctx.fill();
+
+        // Eyes (barely visible)
+        ctx.fillStyle = '#b0bec5';
+        ctx.beginPath();
+        ctx.arc(-2, -8, 1.5, 0, Math.PI * 2);
+        ctx.arc(2, -8, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Daggers
+        ctx.fillStyle = '#9e9e9e';
+        ctx.fillRect(-12, -4, 6, 2);
+        ctx.fillRect(6, -4, 6, 2);
+    },
+
+    // Necromancer - Resurrects dead
+    drawNecromancer(ctx, enemy, time) {
+        // Dark robe
+        ctx.fillStyle = '#1A237E';
+        ctx.beginPath();
+        ctx.moveTo(-8, 12);
+        ctx.lineTo(-6, -4);
+        ctx.lineTo(6, -4);
+        ctx.lineTo(8, 12);
+        ctx.closePath();
+        ctx.fill();
+
+        // Hood
+        ctx.fillStyle = '#0D1B4A';
+        ctx.beginPath();
+        ctx.arc(0, -8, 7, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Skull face
+        ctx.fillStyle = '#e0e0e0';
+        ctx.beginPath();
+        ctx.arc(0, -6, 5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Eye sockets
+        ctx.fillStyle = '#000';
+        ctx.beginPath();
+        ctx.arc(-2, -7, 2, 0, Math.PI * 2);
+        ctx.arc(2, -7, 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Glowing eyes
+        ctx.fillStyle = '#7c4dff';
+        ctx.beginPath();
+        ctx.arc(-2, -7, 1, 0, Math.PI * 2);
+        ctx.arc(2, -7, 1, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Staff
+        ctx.fillStyle = '#5d4037';
+        ctx.fillRect(10, -16, 3, 24);
+
+        // Staff skull
+        ctx.fillStyle = '#e0e0e0';
+        ctx.beginPath();
+        ctx.arc(11.5, -18, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Dark energy
+        ctx.fillStyle = `rgba(124, 77, 255, ${0.3 + Math.sin(time * 4) * 0.2})`;
+        ctx.beginPath();
+        ctx.arc(0, 0, 12, 0, Math.PI * 2);
+        ctx.fill();
+    },
+
+    // Dragon - Flying boss
+    drawDragon(ctx, enemy, time) {
+        const wingFlap = Math.sin(time * 6) * 0.5;
+
+        // Body
+        ctx.fillStyle = '#C62828';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 16, 10, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Neck and head
+        ctx.fillStyle = '#D32F2F';
+        ctx.beginPath();
+        ctx.ellipse(14, -6, 8, 5, -0.4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(22, -10, 6, 5, -0.3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Snout
+        ctx.fillStyle = '#B71C1C';
+        ctx.beginPath();
+        ctx.moveTo(26, -10);
+        ctx.lineTo(34, -8);
+        ctx.lineTo(26, -6);
+        ctx.fill();
+
+        // Wings
+        ctx.fillStyle = '#8B0000';
+        ctx.save();
+        ctx.rotate(wingFlap);
+        ctx.beginPath();
+        ctx.moveTo(-6, -4);
+        ctx.quadraticCurveTo(-24, -36, -30, -12);
+        ctx.lineTo(-10, 0);
+        ctx.fill();
+        ctx.restore();
+
+        ctx.save();
+        ctx.rotate(-wingFlap);
+        ctx.beginPath();
+        ctx.moveTo(6, -4);
+        ctx.quadraticCurveTo(24, -36, 30, -12);
+        ctx.lineTo(10, 0);
+        ctx.fill();
+        ctx.restore();
+
+        // Tail
+        ctx.fillStyle = '#C62828';
+        ctx.beginPath();
+        ctx.moveTo(-14, 4);
+        ctx.quadraticCurveTo(-28, 12, -32, 6);
+        ctx.quadraticCurveTo(-30, 2, -24, 6);
+        ctx.lineTo(-14, 2);
+        ctx.fill();
+
+        // Horns
+        ctx.fillStyle = '#5d4037';
+        ctx.beginPath();
+        ctx.moveTo(20, -14);
+        ctx.lineTo(18, -22);
+        ctx.lineTo(22, -14);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(24, -14);
+        ctx.lineTo(26, -22);
+        ctx.lineTo(28, -14);
+        ctx.fill();
+
+        // Eye
+        ctx.fillStyle = '#ffeb3b';
+        ctx.beginPath();
+        ctx.arc(24, -11, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#000';
+        ctx.beginPath();
+        ctx.arc(24, -11, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Fire breath effect
+        ctx.fillStyle = `rgba(255, 87, 34, ${0.3 + Math.sin(time * 8) * 0.2})`;
+        ctx.beginPath();
+        ctx.moveTo(34, -8);
+        ctx.quadraticCurveTo(44, -8, 48, -6);
+        ctx.quadraticCurveTo(44, -4, 34, -6);
+        ctx.fill();
+    },
+
+    // Giant - Mini-boss
+    drawGiant(ctx, enemy) {
+        // Massive body
+        ctx.fillStyle = '#4E342E';
+        ctx.beginPath();
+        ctx.ellipse(0, 4, 14, 18, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Head
+        ctx.fillStyle = '#5D4037';
+        ctx.beginPath();
+        ctx.arc(0, -16, 10, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Beard
+        ctx.fillStyle = '#3E2723';
+        ctx.beginPath();
+        ctx.moveTo(-8, -10);
+        ctx.quadraticCurveTo(0, 2, 8, -10);
+        ctx.quadraticCurveTo(0, -4, -8, -10);
+        ctx.fill();
+
+        // Eyes
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(-4, -18, 3, 0, Math.PI * 2);
+        ctx.arc(4, -18, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#000';
+        ctx.beginPath();
+        ctx.arc(-4, -18, 1.5, 0, Math.PI * 2);
+        ctx.arc(4, -18, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Club
+        ctx.fillStyle = '#5d4037';
+        ctx.fillRect(16, -10, 6, 28);
+        ctx.fillStyle = '#4e342e';
+        ctx.beginPath();
+        ctx.ellipse(19, -12, 8, 6, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Boss aura
+        ctx.strokeStyle = 'rgba(255, 152, 0, 0.3)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(0, 0, 24, 0, Math.PI * 2);
+        ctx.stroke();
+    },
+
+    // Demon Knight - Boss enemy
+    drawDemonKnight(ctx, enemy) {
+        // Dark armor body
+        ctx.fillStyle = '#B71C1C';
+        ctx.beginPath();
+        ctx.ellipse(0, 2, 12, 14, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Armor plates
+        ctx.fillStyle = '#7f0000';
+        ctx.fillRect(-10, -6, 20, 16);
+        ctx.strokeStyle = '#4a0000';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(-10, -6, 20, 16);
+
+        // Horned helmet
+        ctx.fillStyle = '#212121';
+        ctx.beginPath();
+        ctx.arc(0, -12, 10, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Horns
+        ctx.fillStyle = '#424242';
+        ctx.beginPath();
+        ctx.moveTo(-8, -16);
+        ctx.lineTo(-14, -28);
+        ctx.lineTo(-4, -18);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(8, -16);
+        ctx.lineTo(14, -28);
+        ctx.lineTo(4, -18);
+        ctx.fill();
+
+        // Glowing eyes
+        ctx.fillStyle = '#ff1744';
+        ctx.beginPath();
+        ctx.arc(-4, -12, 3, 0, Math.PI * 2);
+        ctx.arc(4, -12, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Flaming sword
+        ctx.fillStyle = '#ff5722';
+        ctx.fillRect(14, -20, 4, 30);
+        ctx.fillStyle = '#ff9800';
+        ctx.beginPath();
+        ctx.moveTo(14, -20);
+        ctx.lineTo(16, -28);
+        ctx.lineTo(18, -20);
+        ctx.fill();
+
+        // Boss aura
+        ctx.strokeStyle = 'rgba(244, 67, 54, 0.4)';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(0, 0, 22, 0, Math.PI * 2);
+        ctx.stroke();
+    },
+
+    // Demon King - Final boss
+    drawDemonKing(ctx, enemy, time) {
+        const pulse = Math.sin(time * 2) * 0.2 + 0.8;
+
+        // Flame aura
+        ctx.fillStyle = `rgba(255, 87, 34, ${0.2 * pulse})`;
+        ctx.beginPath();
+        ctx.arc(0, 0, 32, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Massive body
+        ctx.fillStyle = '#880E4F';
+        ctx.beginPath();
+        ctx.ellipse(0, 4, 18, 22, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Armor
+        ctx.fillStyle = '#4a0000';
+        ctx.fillRect(-14, -8, 28, 24);
+        ctx.strokeStyle = '#ffd700';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(-14, -8, 28, 24);
+
+        // Skull emblem
+        ctx.fillStyle = '#e0e0e0';
+        ctx.beginPath();
+        ctx.arc(0, 4, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#4a0000';
+        ctx.beginPath();
+        ctx.arc(-2, 3, 2, 0, Math.PI * 2);
+        ctx.arc(2, 3, 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Head
+        ctx.fillStyle = '#ad1457';
+        ctx.beginPath();
+        ctx.arc(0, -18, 14, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Crown of horns
+        ctx.fillStyle = '#212121';
+        for (let i = -2; i <= 2; i++) {
+            const hornX = i * 6;
+            const hornHeight = i === 0 ? 24 : 18;
+            ctx.beginPath();
+            ctx.moveTo(hornX - 3, -24);
+            ctx.lineTo(hornX, -24 - hornHeight);
+            ctx.lineTo(hornX + 3, -24);
+            ctx.fill();
+        }
+
+        // Burning eyes
+        ctx.fillStyle = '#ff1744';
+        ctx.beginPath();
+        ctx.arc(-5, -18, 4, 0, Math.PI * 2);
+        ctx.arc(5, -18, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Eye glow
+        ctx.fillStyle = '#ffeb3b';
+        ctx.beginPath();
+        ctx.arc(-5, -19, 2, 0, Math.PI * 2);
+        ctx.arc(5, -19, 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Flaming cape
+        ctx.fillStyle = `rgba(255, 87, 34, ${0.6 + Math.sin(time * 4) * 0.2})`;
+        for (let i = 0; i < 5; i++) {
+            const flameOffset = Math.sin(time * 6 + i) * 4;
+            ctx.beginPath();
+            ctx.moveTo(-16 + i * 8, 16);
+            ctx.quadraticCurveTo(-16 + i * 8, 30 + flameOffset, -12 + i * 8, 36);
+            ctx.quadraticCurveTo(-8 + i * 8, 30 + flameOffset, -8 + i * 8, 16);
+            ctx.fill();
+        }
+
+        // Boss crown glow
+        ctx.strokeStyle = `rgba(255, 215, 0, ${0.5 * pulse})`;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(0, -18, 18, 0, Math.PI * 2);
+        ctx.stroke();
+    },
+
+    // Default enemy fallback
+    drawDefaultEnemy(ctx, enemy) {
+        const color = this.ENEMY_COLORS[enemy.type] || '#888';
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(0, 0, 10, 0, Math.PI * 2);
+        ctx.fill();
     },
 
     renderProjectiles() {
