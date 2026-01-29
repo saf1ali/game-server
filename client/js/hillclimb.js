@@ -1495,13 +1495,49 @@ const HillClimbGame = {
 
     drawCollectibles() {
         const ctx = this.ctx;
+        const time = performance.now() / 1000;
 
         for (const item of this.collectibles) {
             if (item.collected) continue;
             if (item.x < this.camera.x - 50 || item.x > this.camera.x + this.canvas.width + 50) continue;
 
-            if (item.type === 'coin') {
-                // Golden coin with glow
+            if (item.type === 'giantcoin') {
+                // Giant coin (10x value) with pulsing effect
+                const pulse = 1 + Math.sin(time * 4) * 0.15;
+                const radius = 22 * pulse;
+
+                // Outer glow
+                ctx.shadowColor = '#ffdd00';
+                ctx.shadowBlur = 25;
+
+                // Main coin body
+                ctx.fillStyle = '#ffd700';
+                ctx.beginPath();
+                ctx.arc(item.x, item.y, radius, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Inner ring
+                ctx.strokeStyle = '#ffaa00';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(item.x, item.y, radius * 0.7, 0, Math.PI * 2);
+                ctx.stroke();
+
+                // Star in center
+                this.drawStar(ctx, item.x, item.y, 5, radius * 0.45, radius * 0.22);
+                ctx.fillStyle = '#fff8dc';
+                ctx.fill();
+
+                ctx.shadowBlur = 0;
+
+                // "10x" label below
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 11px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('10x', item.x, item.y + radius + 14);
+
+            } else if (item.type === 'coin') {
+                // Regular golden coin with glow
                 ctx.shadowColor = '#ffd700';
                 ctx.shadowBlur = 10;
                 ctx.fillStyle = '#ffd700';
@@ -1515,23 +1551,70 @@ const HillClimbGame = {
                 ctx.beginPath();
                 ctx.arc(item.x - 2, item.y - 2, 4, 0, Math.PI * 2);
                 ctx.fill();
+
             } else if (item.type === 'fuel') {
-                // Fuel canister
+                // Check if this is a large fuel can (value > 40)
+                const isLarge = item.value && item.value > 40;
+                const scale = isLarge ? 1.4 : 1;
+                const baseW = 20 * scale;
+                const baseH = 30 * scale;
+
+                // Fuel canister with glow
                 ctx.shadowColor = '#00ff00';
-                ctx.shadowBlur = 15;
+                ctx.shadowBlur = isLarge ? 25 : 15;
+
+                // Can body
                 ctx.fillStyle = '#228b22';
-                ctx.fillRect(item.x - 10, item.y - 15, 20, 30);
+                ctx.fillRect(item.x - baseW / 2, item.y - baseH / 2, baseW, baseH);
                 ctx.fillStyle = '#32cd32';
-                ctx.fillRect(item.x - 7, item.y - 12, 14, 24);
+                ctx.fillRect(item.x - baseW / 2 + 3, item.y - baseH / 2 + 3, baseW - 6, baseH - 6);
+
+                // Handle on top
+                ctx.fillStyle = '#666';
+                ctx.fillRect(item.x - 4, item.y - baseH / 2 - 6, 8, 6);
+                ctx.fillRect(item.x - 6, item.y - baseH / 2 - 8, 12, 3);
+
                 ctx.shadowBlur = 0;
 
                 // Fuel label
                 ctx.fillStyle = '#fff';
-                ctx.font = 'bold 10px Arial';
+                ctx.font = `bold ${isLarge ? 14 : 10}px Arial`;
                 ctx.textAlign = 'center';
-                ctx.fillText('F', item.x, item.y + 3);
+                ctx.fillText('F', item.x, item.y + 4);
+
+                // Value label below large cans
+                if (isLarge && item.value) {
+                    ctx.fillStyle = '#90ee90';
+                    ctx.font = 'bold 10px Arial';
+                    ctx.fillText('+' + Math.round(item.value), item.x, item.y + baseH / 2 + 12);
+                }
             }
         }
+    },
+
+    drawStar(ctx, cx, cy, spikes, outerRadius, innerRadius) {
+        let rot = Math.PI / 2 * 3;
+        let x = cx;
+        let y = cy;
+        const step = Math.PI / spikes;
+
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - outerRadius);
+
+        for (let i = 0; i < spikes; i++) {
+            x = cx + Math.cos(rot) * outerRadius;
+            y = cy + Math.sin(rot) * outerRadius;
+            ctx.lineTo(x, y);
+            rot += step;
+
+            x = cx + Math.cos(rot) * innerRadius;
+            y = cy + Math.sin(rot) * innerRadius;
+            ctx.lineTo(x, y);
+            rot += step;
+        }
+
+        ctx.lineTo(cx, cy - outerRadius);
+        ctx.closePath();
     },
 
     drawVehicle() {
@@ -1544,57 +1627,115 @@ const HillClimbGame = {
         ctx.rotate(car.rotation);
 
         const halfWB = vehicle.wheelBase / 2;
+        const bw = vehicle.bodyWidth;
+        const bh = vehicle.bodyHeight;
 
-        // Suspension lines
-        ctx.strokeStyle = '#555';
-        ctx.lineWidth = 3;
+        // Shadow underneath vehicle
+        ctx.save();
+        ctx.rotate(-car.rotation); // Counter-rotate for flat shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        ctx.beginPath();
+        ctx.ellipse(0, vehicle.wheelRadius + this.physics.springRestLength + 5, bw * 0.6, 8, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
 
-        // Front suspension
+        // Suspension springs (visual)
         const frontCompression = this.wheels.front.compression || 0;
-        ctx.beginPath();
-        ctx.moveTo(halfWB, 0);
-        ctx.lineTo(halfWB, vehicle.wheelRadius + this.physics.springRestLength - frontCompression);
-        ctx.stroke();
-
-        // Rear suspension
         const rearCompression = this.wheels.rear.compression || 0;
-        ctx.beginPath();
-        ctx.moveTo(-halfWB, 0);
-        ctx.lineTo(-halfWB, vehicle.wheelRadius + this.physics.springRestLength - rearCompression);
-        ctx.stroke();
+        this.drawSuspensionSpring(ctx, halfWB, 0, vehicle.wheelRadius + this.physics.springRestLength - frontCompression);
+        this.drawSuspensionSpring(ctx, -halfWB, 0, vehicle.wheelRadius + this.physics.springRestLength - rearCompression);
 
-        // Car body
+        // Exhaust pipe (rear, bottom)
+        ctx.fillStyle = '#555';
+        ctx.fillRect(-bw / 2 - 8, -5, 10, 6);
+        ctx.fillStyle = '#333';
+        ctx.beginPath();
+        ctx.arc(-bw / 2 - 8, -2, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Car body - chunky curved shape
         ctx.fillStyle = vehicle.bodyColor;
         ctx.beginPath();
-        ctx.roundRect(
-            -vehicle.bodyWidth / 2,
-            -vehicle.bodyHeight,
-            vehicle.bodyWidth,
-            vehicle.bodyHeight,
-            5
-        );
+        // Start at front bottom
+        ctx.moveTo(bw / 2, 0);
+        // Front bumper curve
+        ctx.quadraticCurveTo(bw / 2 + 8, -5, bw / 2 + 5, -bh * 0.4);
+        // Hood slope
+        ctx.lineTo(bw / 4, -bh * 0.5);
+        // Windshield slope
+        ctx.quadraticCurveTo(bw / 6, -bh * 0.9, 0, -bh);
+        // Roof
+        ctx.lineTo(-bw / 4, -bh);
+        // Rear window slope
+        ctx.quadraticCurveTo(-bw / 3, -bh * 0.85, -bw / 2.5, -bh * 0.5);
+        // Rear slope
+        ctx.lineTo(-bw / 2, -bh * 0.3);
+        // Rear bumper
+        ctx.quadraticCurveTo(-bw / 2 - 5, -5, -bw / 2, 0);
+        // Bottom
+        ctx.lineTo(bw / 2, 0);
+        ctx.closePath();
         ctx.fill();
 
-        // Body highlight
+        // Body highlight (top)
         ctx.fillStyle = vehicle.color;
         ctx.beginPath();
-        ctx.roundRect(
-            -vehicle.bodyWidth / 2 + 3,
-            -vehicle.bodyHeight + 3,
-            vehicle.bodyWidth - 6,
-            vehicle.bodyHeight / 2,
-            3
-        );
+        ctx.moveTo(bw / 4, -bh * 0.5);
+        ctx.quadraticCurveTo(bw / 6, -bh * 0.85, 0, -bh + 3);
+        ctx.lineTo(-bw / 4, -bh + 3);
+        ctx.quadraticCurveTo(-bw / 3, -bh * 0.8, -bw / 2.5 + 5, -bh * 0.5);
+        ctx.closePath();
         ctx.fill();
 
-        // Windows
-        ctx.fillStyle = '#87ceeb';
-        ctx.fillRect(
-            -vehicle.bodyWidth / 4,
-            -vehicle.bodyHeight + 5,
-            vehicle.bodyWidth / 2,
-            vehicle.bodyHeight / 3
-        );
+        // Windshield with reflection
+        ctx.fillStyle = 'rgba(135, 206, 235, 0.85)';
+        ctx.beginPath();
+        ctx.moveTo(bw / 5, -bh * 0.55);
+        ctx.quadraticCurveTo(bw / 8, -bh * 0.85, -bw / 10, -bh * 0.92);
+        ctx.lineTo(-bw / 4 + 5, -bh * 0.92);
+        ctx.quadraticCurveTo(-bw / 3 + 8, -bh * 0.75, -bw / 2.8, -bh * 0.55);
+        ctx.closePath();
+        ctx.fill();
+
+        // Window reflection highlight
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.beginPath();
+        ctx.moveTo(bw / 6, -bh * 0.6);
+        ctx.lineTo(bw / 10, -bh * 0.75);
+        ctx.lineTo(-bw / 8, -bh * 0.75);
+        ctx.lineTo(-bw / 12, -bh * 0.6);
+        ctx.closePath();
+        ctx.fill();
+
+        // Driver silhouette
+        ctx.fillStyle = 'rgba(40, 40, 40, 0.7)';
+        // Head
+        ctx.beginPath();
+        ctx.arc(-bw / 10, -bh * 0.75, 6, 0, Math.PI * 2);
+        ctx.fill();
+        // Body/shoulders
+        ctx.beginPath();
+        ctx.ellipse(-bw / 10, -bh * 0.55, 8, 10, 0, 0, Math.PI);
+        ctx.fill();
+
+        // Headlights (front)
+        ctx.fillStyle = '#fff8dc';
+        ctx.shadowColor = '#ffff88';
+        ctx.shadowBlur = this.input.gas ? 12 : 6;
+        ctx.beginPath();
+        ctx.ellipse(bw / 2 + 2, -bh * 0.25, 4, 6, 0.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        // Taillights (rear) - brighter when braking
+        const braking = this.input.brake;
+        ctx.fillStyle = braking ? '#ff3333' : '#aa2222';
+        ctx.shadowColor = '#ff0000';
+        ctx.shadowBlur = braking ? 15 : 5;
+        ctx.beginPath();
+        ctx.ellipse(-bw / 2 - 2, -bh * 0.2, 3, 5, -0.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
 
         // Draw wheels
         this.drawWheel(halfWB, vehicle.wheelRadius + this.physics.springRestLength - frontCompression,
@@ -1605,39 +1746,85 @@ const HillClimbGame = {
         ctx.restore();
     },
 
+    drawSuspensionSpring(ctx, x, yTop, yBottom) {
+        const springCoils = 5;
+        const springWidth = 6;
+        const springLength = yBottom - yTop;
+        const coilHeight = springLength / springCoils;
+
+        ctx.strokeStyle = '#666';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x, yTop);
+
+        for (let i = 0; i < springCoils; i++) {
+            const y1 = yTop + coilHeight * i + coilHeight * 0.25;
+            const y2 = yTop + coilHeight * i + coilHeight * 0.75;
+            const dir = i % 2 === 0 ? 1 : -1;
+            ctx.lineTo(x + springWidth * dir, y1);
+            ctx.lineTo(x - springWidth * dir, y2);
+        }
+        ctx.lineTo(x, yBottom);
+        ctx.stroke();
+    },
+
     drawWheel(x, y, radius, rotation) {
         const ctx = this.ctx;
 
-        // Tire
+        // Tire with tread
         ctx.fillStyle = '#1a1a1a';
         ctx.beginPath();
         ctx.arc(x, y, radius, 0, Math.PI * 2);
         ctx.fill();
 
-        // Rim
-        ctx.fillStyle = '#444';
+        // Tire tread marks (8 rotating marks on outer edge)
+        ctx.fillStyle = '#333';
+        for (let i = 0; i < 8; i++) {
+            const angle = rotation + (i * Math.PI / 4);
+            const treadX = x + Math.cos(angle) * (radius - 3);
+            const treadY = y + Math.sin(angle) * (radius - 3);
+            ctx.save();
+            ctx.translate(treadX, treadY);
+            ctx.rotate(angle);
+            ctx.fillRect(-2, -4, 4, 8);
+            ctx.restore();
+        }
+
+        // Rim with metallic gradient
+        const rimGradient = ctx.createRadialGradient(x - radius * 0.15, y - radius * 0.15, 0, x, y, radius * 0.6);
+        rimGradient.addColorStop(0, '#888');
+        rimGradient.addColorStop(0.5, '#555');
+        rimGradient.addColorStop(1, '#333');
+        ctx.fillStyle = rimGradient;
         ctx.beginPath();
         ctx.arc(x, y, radius * 0.6, 0, Math.PI * 2);
         ctx.fill();
 
-        // Spokes
-        ctx.strokeStyle = '#666';
-        ctx.lineWidth = 2;
-        for (let i = 0; i < 4; i++) {
-            const angle = rotation + (i * Math.PI / 2);
+        // 5 Spokes
+        ctx.strokeStyle = '#777';
+        ctx.lineWidth = 3;
+        for (let i = 0; i < 5; i++) {
+            const angle = rotation + (i * Math.PI * 2 / 5);
             ctx.beginPath();
-            ctx.moveTo(x, y);
-            ctx.lineTo(
-                x + Math.cos(angle) * radius * 0.5,
-                y + Math.sin(angle) * radius * 0.5
-            );
+            ctx.moveTo(x + Math.cos(angle) * radius * 0.18, y + Math.sin(angle) * radius * 0.18);
+            ctx.lineTo(x + Math.cos(angle) * radius * 0.52, y + Math.sin(angle) * radius * 0.52);
             ctx.stroke();
         }
 
-        // Center hub
+        // Center hub with gradient
+        const hubGradient = ctx.createRadialGradient(x - 2, y - 2, 0, x, y, radius * 0.22);
+        hubGradient.addColorStop(0, '#aaa');
+        hubGradient.addColorStop(0.7, '#666');
+        hubGradient.addColorStop(1, '#444');
+        ctx.fillStyle = hubGradient;
+        ctx.beginPath();
+        ctx.arc(x, y, radius * 0.22, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Hub cap center dot
         ctx.fillStyle = '#888';
         ctx.beginPath();
-        ctx.arc(x, y, radius * 0.2, 0, Math.PI * 2);
+        ctx.arc(x, y, radius * 0.08, 0, Math.PI * 2);
         ctx.fill();
     },
 
