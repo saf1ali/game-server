@@ -238,6 +238,21 @@ private:
         bool active;
     };
 
+    struct Skeleton {
+        int id;
+        int mageId;            // Which mage tower spawned this
+        float x, y;            // Position on path
+        int hp;
+        int maxHp;
+        int damage;
+        int engagedEnemyId;    // Enemy currently fighting (-1 if none)
+        float attackSpeed;
+        float attackCooldown;
+        float lifetime;        // Seconds remaining before despawn
+        bool active;
+        bool isStrong;         // Lich Lord (tier 4) skeletons are stronger
+    };
+
     struct Wave {
         std::vector<WaveEnemy> enemies;
         int bonusGold;
@@ -276,6 +291,7 @@ private:
     std::vector<Enemy> enemies_;
     std::vector<Projectile> projectiles_;
     std::vector<Soldier> soldiers_;        // Barracks soldiers
+    std::vector<Skeleton> skeletons_;      // Mage-spawned skeletons
 
     int gold_;
     int lives_;
@@ -292,6 +308,7 @@ private:
     int nextEnemyId_;
     int nextProjectileId_;
     int nextSoldierId_;
+    int nextSkeletonId_;
 
     // Static data
     static const std::vector<Wave> WAVES;
@@ -340,6 +357,10 @@ private:
     int getSoldierDamage(const Tower& barracks) const;
     int getSoldierBlockCount(const Tower& barracks) const;
     FloatPoint getSoldierSpawnPosition(const Tower& barracks, int soldierIndex) const;
+
+    // Methods - Skeletons (Mage Necromancer upgrade)
+    void spawnSkeleton(float x, float y, int mageId, bool isStrong);
+    void updateSkeletons(float dt);
 
     // Methods - Projectiles
     void createProjectile(Tower& tower, Enemy& target);

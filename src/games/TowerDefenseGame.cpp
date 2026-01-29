@@ -248,7 +248,7 @@ TowerDefenseGame::TowerDefenseGame()
     : gold_(STARTING_GOLD), lives_(STARTING_LIVES), wave_(0), score_(0),
       waveActive_(false), gameOver_(false), victory_(false), fastForward_(false),
       waveTimer_(0), enemiesSpawned_(0), enemiesRemaining_(0),
-      nextTowerId_(1), nextEnemyId_(1), nextProjectileId_(1), nextSoldierId_(1) {
+      nextTowerId_(1), nextEnemyId_(1), nextProjectileId_(1), nextSoldierId_(1), nextSkeletonId_(1) {
     initMap();
 }
 
@@ -312,6 +312,7 @@ void TowerDefenseGame::update(float deltaTime) {
     updateEnemies(dt);
     updateProjectiles(dt);
     updateSoldiers(dt);
+    updateSkeletons(dt);
     checkWaveComplete();
 }
 
@@ -1040,17 +1041,42 @@ void TowerDefenseGame::updateProjectiles(float dt) {
 void TowerDefenseGame::spawnEnemy(EnemyType type) {
     const auto& stats = getEnemyStats(type);
 
+    // Wave-based scaling: enemies get stronger each wave
+    // Wave 1-10: 1.0x to 1.5x HP
+    // Wave 11-25: 1.5x to 3.0x HP
+    // Wave 26-40: 3.0x to 6.0x HP
+    // Wave 41-50: 6.0x to 10.0x HP
+    float hpMultiplier = 1.0f;
+    float armorMultiplier = 1.0f;
+    float speedMultiplier = 1.0f;
+
+    int w = wave_ + 1;  // 1-indexed wave
+    if (w <= 10) {
+        hpMultiplier = 1.0f + (w - 1) * 0.055f;
+    } else if (w <= 25) {
+        hpMultiplier = 1.5f + (w - 10) * 0.1f;
+    } else if (w <= 40) {
+        hpMultiplier = 3.0f + (w - 25) * 0.2f;
+    } else {
+        hpMultiplier = 6.0f + (w - 40) * 0.4f;
+    }
+
+    armorMultiplier = 1.0f + (w - 1) * 0.03f;
+    if (w > 30) {
+        speedMultiplier = 1.0f + (w - 30) * 0.01f;
+    }
+
     Enemy enemy;
     enemy.id = nextEnemyId_++;
     enemy.type = type;
     enemy.pathIndex = 0;
     enemy.pathProgress = 0;
-    enemy.hp = stats.hp;
-    enemy.maxHp = stats.hp;
-    enemy.armor = stats.armor;
-    enemy.baseArmor = stats.armor;
-    enemy.speed = stats.speed;
-    enemy.baseSpeed = stats.speed;
+    enemy.hp = static_cast<int>(stats.hp * hpMultiplier);
+    enemy.maxHp = enemy.hp;
+    enemy.armor = static_cast<int>(stats.armor * armorMultiplier);
+    enemy.baseArmor = enemy.armor;
+    enemy.speed = stats.speed * speedMultiplier;
+    enemy.baseSpeed = enemy.speed;
     enemy.flying = stats.flying;
     enemy.camo = stats.camo;
     enemy.active = true;
@@ -1225,6 +1251,29 @@ void TowerDefenseGame::killEnemy(Enemy& enemy) {
                     }
                 }
                 break;
+            }
+        }
+    }
+
+    // Necromancer (Mage Path B tier 3+): chance to spawn skeleton on kill
+    for (const auto& tower : towers_) {
+        if (tower.type == TowerType::MAGE && tower.upgrades.pathBTier >= 3) {
+            // Check if enemy died in range of this mage
+            float px = tower.x * 48 + 24;  // CELL_SIZE = 48
+            float py = tower.y * 48 + 24;
+            float d = distance(px, py, enemy.x, enemy.y);
+
+            if (d <= tower.range) {
+                // Tier 3 (CHOICE_A) = 30% chance, Tier 4 (CHOICE_B) = 50% chance
+                bool isLichLord = (tower.upgrades.pathBTier == 3 &&
+                                   tower.upgrades.pathBTier3 == Tier3Choice::CHOICE_B);
+                float spawnChance = isLichLord ? 0.5f : 0.3f;
+
+                float roll = static_cast<float>(rand()) / RAND_MAX;
+                if (roll < spawnChance) {
+                    spawnSkeleton(enemy.x, enemy.y, tower.id, isLichLord);
+                }
+                break;  // Only one mage can spawn per kill
             }
         }
     }
@@ -1533,6 +1582,114 @@ void TowerDefenseGame::killSoldier(Soldier& soldier) {
 }
 
 // ============================================================================
+// SKELETONS (Mage Necromancer upgrade)
+// ============================================================================
+
+void TowerDefenseGame::spawnSkeleton(float x, float y, int mageId, bool isStrong) {
+    Skeleton skel;
+    skel.id = nextSkeletonId_++;
+    skel.mageId = mageId;
+    skel.x = x;
+    skel.y = y;
+    skel.isStrong = isStrong;
+
+    // Base stats for normal skeleton
+    skel.hp = isStrong ? 80 : 40;
+    skel.maxHp = skel.hp;
+    skel.damage = isStrong ? 20 : 10;
+    skel.attackSpeed = isStrong ? 1.5f : 1.0f;
+    skel.attackCooldown = 0;
+    skel.lifetime = isStrong ? 20.0f : 12.0f;  // Stronger skeletons last longer
+    skel.engagedEnemyId = -1;
+    skel.active = true;
+
+    skeletons_.push_back(skel);
+}
+
+void TowerDefenseGame::updateSkeletons(float dt) {
+    for (auto& skel : skeletons_) {
+        if (!skel.active) continue;
+
+        // Decrease lifetime
+        skel.lifetime -= dt;
+        if (skel.lifetime <= 0) {
+            skel.active = false;
+            continue;
+        }
+
+        // Decrease attack cooldown
+        if (skel.attackCooldown > 0) {
+            skel.attackCooldown -= dt;
+        }
+
+        // Find nearest enemy to engage
+        if (skel.engagedEnemyId < 0) {
+            float minDist = 50.0f;  // Skeleton engagement range
+            int targetId = -1;
+
+            for (auto& enemy : enemies_) {
+                if (!enemy.active || enemy.flying) continue;
+
+                float dx = enemy.x - skel.x;
+                float dy = enemy.y - skel.y;
+                float dist = std::sqrt(dx * dx + dy * dy);
+
+                if (dist < minDist) {
+                    minDist = dist;
+                    targetId = enemy.id;
+                }
+            }
+
+            if (targetId >= 0) {
+                skel.engagedEnemyId = targetId;
+            }
+        }
+
+        // Attack engaged enemy
+        if (skel.engagedEnemyId >= 0) {
+            auto enemyIt = std::find_if(enemies_.begin(), enemies_.end(),
+                [&](const Enemy& e) { return e.id == skel.engagedEnemyId && e.active; });
+
+            if (enemyIt == enemies_.end()) {
+                skel.engagedEnemyId = -1;
+            } else {
+                // Move toward enemy
+                float dx = enemyIt->x - skel.x;
+                float dy = enemyIt->y - skel.y;
+                float dist = std::sqrt(dx * dx + dy * dy);
+
+                if (dist > 20.0f) {
+                    float speed = 60.0f;  // Skeleton move speed
+                    skel.x += (dx / dist) * speed * dt;
+                    skel.y += (dy / dist) * speed * dt;
+                } else if (skel.attackCooldown <= 0) {
+                    // Attack!
+                    damageEnemy(*enemyIt, skel.damage, false);
+                    skel.attackCooldown = 1.0f / skel.attackSpeed;
+
+                    // Check if enemy died
+                    if (enemyIt->hp <= 0) {
+                        skel.engagedEnemyId = -1;
+                    }
+                }
+
+                // Skeleton takes damage from enemy (slower than soldiers)
+                skel.hp -= static_cast<int>(5 * dt);  // 5 DPS from being in combat
+                if (skel.hp <= 0) {
+                    skel.active = false;
+                }
+            }
+        }
+    }
+
+    // Remove inactive skeletons
+    skeletons_.erase(
+        std::remove_if(skeletons_.begin(), skeletons_.end(),
+            [](const Skeleton& s) { return !s.active; }),
+        skeletons_.end());
+}
+
+// ============================================================================
 // WAVES
 // ============================================================================
 
@@ -1628,14 +1785,21 @@ void TowerDefenseGame::handleInput(int, const json& input) {
         int towerId = input.value("towerId", -1);
         std::string pathStr = input.value("path", "");
         int tier = input.value("tier", 0);
-        std::string choiceStr = input.value("choice", "");
 
         UpgradePath path = (pathStr == "B") ? UpgradePath::PATH_B : UpgradePath::PATH_A;
-        Tier3Choice choice = Tier3Choice::NONE;
-        if (choiceStr == "A") choice = Tier3Choice::CHOICE_A;
-        else if (choiceStr == "B") choice = Tier3Choice::CHOICE_B;
 
-        purchaseUpgrade(towerId, path, tier, choice);
+        // Convert 4-tier system to internal representation:
+        // Client sends tier 1,2,3,4 - we map tier 3->CHOICE_A, tier 4->CHOICE_B
+        Tier3Choice choice = Tier3Choice::NONE;
+        int internalTier = tier;
+        if (tier == 3) {
+            choice = Tier3Choice::CHOICE_A;
+        } else if (tier == 4) {
+            internalTier = 3;  // Tier 4 is actually tier 3 with CHOICE_B
+            choice = Tier3Choice::CHOICE_B;
+        }
+
+        purchaseUpgrade(towerId, path, internalTier, choice);
     }
     else if (action == "setTargeting") {
         int towerId = input.value("towerId", -1);
@@ -1760,6 +1924,23 @@ json TowerDefenseGame::getState() const {
     }
     state["soldiers"] = soldiersJson;
 
+    // Skeletons (mage-spawned units)
+    json skeletonsJson = json::array();
+    for (const auto& sk : skeletons_) {
+        if (!sk.active) continue;
+        skeletonsJson.push_back({
+            {"id", sk.id},
+            {"x", sk.x},
+            {"y", sk.y},
+            {"hp", sk.hp},
+            {"maxHp", sk.maxHp},
+            {"engaged", sk.engagedEnemyId >= 0},
+            {"isStrong", sk.isStrong},
+            {"lifetime", sk.lifetime}
+        });
+    }
+    state["skeletons"] = skeletonsJson;
+
     // Grid config
     state["config"] = {
         {"gridWidth", GRID_WIDTH},
@@ -1772,15 +1953,33 @@ json TowerDefenseGame::getState() const {
 
 json TowerDefenseGame::upgradeStateToJson(const UpgradeState& state) const {
     json j;
-    j["pathA"] = state.pathATier;
-    j["pathB"] = state.pathBTier;
-    j["pathAChoice"] = (state.pathATier3 == Tier3Choice::NONE) ? "" :
-                       (state.pathATier3 == Tier3Choice::CHOICE_A) ? "A" : "B";
-    j["pathBChoice"] = (state.pathBTier3 == Tier3Choice::NONE) ? "" :
-                       (state.pathBTier3 == Tier3Choice::CHOICE_A) ? "A" : "B";
-    j["notation"] = state.getNotation();
-    j["pathALocked"] = state.isPathLocked(UpgradePath::PATH_A);
-    j["pathBLocked"] = state.isPathLocked(UpgradePath::PATH_B);
+
+    // Convert internal tier + choice to client's 4-tier format
+    // Internal: pathATier 0-3, pathATier3 = NONE/A/B
+    // Client: pathA 0-4 where tier 3 with CHOICE_B = 4
+    int clientPathA = state.pathATier;
+    int clientPathB = state.pathBTier;
+
+    if (state.pathATier == 3 && state.pathATier3 == Tier3Choice::CHOICE_B) {
+        clientPathA = 4;
+    }
+    if (state.pathBTier == 3 && state.pathBTier3 == Tier3Choice::CHOICE_B) {
+        clientPathB = 4;
+    }
+
+    j["pathA"] = clientPathA;
+    j["pathB"] = clientPathB;
+    j["notation"] = std::to_string(clientPathA) + "-" + std::to_string(clientPathB);
+
+    // Path locking: if one path is at tier 3+, the other is locked at tier 2
+    bool pathALocked = clientPathB >= 3;
+    bool pathBLocked = clientPathA >= 3;
+
+    j["pathALocked"] = pathALocked;
+    j["pathBLocked"] = pathBLocked;
+    j["pathAMax"] = pathALocked ? 2 : 4;
+    j["pathBMax"] = pathBLocked ? 2 : 4;
+
     return j;
 }
 

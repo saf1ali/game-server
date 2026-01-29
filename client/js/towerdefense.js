@@ -531,6 +531,7 @@ const TowerDefenseRenderer = {
         this.renderEnemies();
         this.renderProjectiles();
         this.renderSoldiers();
+        this.renderSkeletons();
         this.renderHoverPreview();
         this.renderUI();
 
@@ -2209,6 +2210,89 @@ const TowerDefenseRenderer = {
                 ctx.fillRect(-1, -12, 2, 12);
                 ctx.restore();
             }
+        }
+    },
+
+    renderSkeletons() {
+        if (!this.state.skeletons || this.state.skeletons.length === 0) return;
+
+        const ctx = this.ctx;
+
+        for (const skeleton of this.state.skeletons) {
+            const x = skeleton.x;
+            const y = skeleton.y;
+
+            // Health bar (purple for skeletons)
+            ctx.fillStyle = '#333';
+            ctx.fillRect(x - 8, y - 20, 16, 3);
+            const hpPercent = skeleton.hp / skeleton.maxHp;
+            ctx.fillStyle = skeleton.isStrong ? '#9c27b0' : '#7b1fa2';
+            ctx.fillRect(x - 8, y - 20, 16 * hpPercent, 3);
+
+            // Lifetime indicator (fading when close to despawn)
+            const lifetimePercent = Math.min(skeleton.lifetime / 15, 1);
+            const alpha = lifetimePercent < 0.3 ? 0.5 + lifetimePercent : 1;
+
+            ctx.globalAlpha = alpha;
+
+            // Skeleton body (bone white/gray)
+            const bodyColor = skeleton.isStrong ? '#e1bee7' : '#bdbdbd';
+            ctx.fillStyle = bodyColor;
+            ctx.beginPath();
+            ctx.arc(x, y, skeleton.isStrong ? 9 : 7, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Skull
+            ctx.fillStyle = skeleton.isStrong ? '#f3e5f5' : '#e0e0e0';
+            ctx.beginPath();
+            ctx.arc(x, y - 3, skeleton.isStrong ? 6 : 5, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Eye sockets (dark purple glow)
+            ctx.fillStyle = skeleton.isStrong ? '#7b1fa2' : '#4a148c';
+            ctx.beginPath();
+            ctx.arc(x - 2, y - 4, 1.5, 0, Math.PI * 2);
+            ctx.arc(x + 2, y - 4, 1.5, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Bone arms
+            ctx.strokeStyle = bodyColor;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(x - 6, y);
+            ctx.lineTo(x - 10, y + 4);
+            ctx.moveTo(x + 6, y);
+            ctx.lineTo(x + 10, y + 4);
+            ctx.stroke();
+
+            // Sword animation when engaged (purple/magic sword for strong)
+            if (skeleton.engaged) {
+                const time = Date.now() / 80;
+                const swingAngle = Math.sin(time) * 0.6;
+                ctx.save();
+                ctx.translate(x + 8, y);
+                ctx.rotate(swingAngle);
+                ctx.fillStyle = skeleton.isStrong ? '#9c27b0' : '#757575';
+                ctx.fillRect(-1, -14, 2, 14);
+                // Sword tip
+                ctx.beginPath();
+                ctx.moveTo(-2, -14);
+                ctx.lineTo(0, -18);
+                ctx.lineTo(2, -14);
+                ctx.fill();
+                ctx.restore();
+            }
+
+            // Strong skeleton purple aura
+            if (skeleton.isStrong) {
+                ctx.strokeStyle = 'rgba(156, 39, 176, 0.4)';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(x, y, 12, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+
+            ctx.globalAlpha = 1;
         }
     },
 
