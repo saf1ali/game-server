@@ -64,6 +64,13 @@ const HillClimbGame = {
     // Particles
     particles: [],
 
+    // Crash detection grace period
+    crashGraceTimer: 0,
+    lastBadLandingTime: 0,
+
+    // First fuel tracking
+    firstFuelSpawned: false,
+
     // Vehicle definitions
     vehicles: {
         jeep: {
@@ -334,6 +341,9 @@ const HillClimbGame = {
         // Reset tracking variables
         this.wasAirborne = false;
         this.lastMilestone = 0;
+        this.firstFuelSpawned = false;
+        this.crashGraceTimer = 0;
+        this.lastBadLandingTime = 0;
 
         // Position car on ground
         this.state.car.y = this.getTerrainHeight(100) - 30;
@@ -457,45 +467,113 @@ const HillClimbGame = {
         // Don't spawn in starting area
         startX = Math.max(startX, 300);
 
-        let x = startX + 50 + Math.random() * 100;
+        // Guaranteed first fuel can within first 800 pixels (80m)
+        if (startX <= 300 && !this.firstFuelSpawned) {
+            const firstFuelX = 500 + Math.random() * 250;
+            const terrainY = this.getTerrainHeight(firstFuelX);
+            this.collectibles.push({
+                type: 'fuel',
+                x: firstFuelX,
+                y: terrainY - 55,
+                collected: false,
+                value: 40,
+                isLarge: true
+            });
+            this.firstFuelSpawned = true;
+        }
+
+        let x = startX + 30 + Math.random() * 60;
+        let lastFuelX = startX - 1000;
+
         while (x < endX) {
             const terrainY = this.getTerrainHeight(x);
+            const distanceFromLastFuel = x - lastFuelX;
 
-            // Spawn coin or fuel canister
-            if (Math.random() < 0.15) {
-                // Fuel canister
+            // GUARANTEED fuel can every 750-1500 pixels (75-150m)
+            const needsFuel = distanceFromLastFuel >= 750 ||
+                             (distanceFromLastFuel >= 500 && Math.random() < distanceFromLastFuel / 1200);
+
+            if (needsFuel) {
+                // Fuel canister - larger and more fuel
                 this.collectibles.push({
                     type: 'fuel',
                     x: x,
-                    y: terrainY - 40,
+                    y: terrainY - 55,
                     collected: false,
-                    value: 25
+                    value: 30 + Math.floor(Math.random() * 15),  // 30-44 units
+                    isLarge: Math.random() < 0.35
                 });
-                x += 200 + Math.random() * 300;
+                lastFuelX = x;
+                x += 80 + Math.random() * 100;
             } else {
-                // Coin cluster or single
-                if (Math.random() < 0.3) {
-                    // Arc pattern
-                    for (let i = 0; i < 5; i++) {
+                // Coin spawning - much denser with varied patterns
+                const coinPattern = Math.random();
+
+                if (coinPattern < 0.04) {
+                    // GIANT COIN worth 10x (rare but exciting)
+                    this.collectibles.push({
+                        type: 'giantcoin',
+                        x: x,
+                        y: terrainY - 65,
+                        collected: false,
+                        value: 100
+                    });
+                    x += 70 + Math.random() * 50;
+                } else if (coinPattern < 0.40) {
+                    // Arc cluster - 8-12 coins
+                    const coinCount = 8 + Math.floor(Math.random() * 5);
+                    for (let i = 0; i < coinCount; i++) {
                         this.collectibles.push({
                             type: 'coin',
-                            x: x + i * 25,
-                            y: terrainY - 50 - Math.sin(i / 4 * Math.PI) * 40,
+                            x: x + i * 20,
+                            y: terrainY - 45 - Math.sin(i / (coinCount - 1) * Math.PI) * 55,
                             collected: false,
                             value: 10
                         });
                     }
-                    x += 150;
+                    x += coinCount * 20 + 30;
+                } else if (coinPattern < 0.60) {
+                    // Vertical stack - 5-7 coins
+                    const stackCount = 5 + Math.floor(Math.random() * 3);
+                    for (let i = 0; i < stackCount; i++) {
+                        this.collectibles.push({
+                            type: 'coin',
+                            x: x,
+                            y: terrainY - 35 - i * 18,
+                            collected: false,
+                            value: 10
+                        });
+                    }
+                    x += 50 + Math.random() * 35;
+                } else if (coinPattern < 0.75) {
+                    // Diamond pattern - 9 coins
+                    const positions = [
+                        [0, 0], [-12, 18], [12, 18], [-24, 36], [0, 36],
+                        [24, 36], [-12, 54], [12, 54], [0, 72]
+                    ];
+                    for (const [ox, oy] of positions) {
+                        this.collectibles.push({
+                            type: 'coin',
+                            x: x + ox,
+                            y: terrainY - 35 - oy,
+                            collected: false,
+                            value: 10
+                        });
+                    }
+                    x += 65 + Math.random() * 40;
                 } else {
-                    // Single coin
-                    this.collectibles.push({
-                        type: 'coin',
-                        x: x,
-                        y: terrainY - 40,
-                        collected: false,
-                        value: 10
-                    });
-                    x += 50 + Math.random() * 80;
+                    // Small cluster - 2-4 coins
+                    const smallCount = 2 + Math.floor(Math.random() * 3);
+                    for (let i = 0; i < smallCount; i++) {
+                        this.collectibles.push({
+                            type: 'coin',
+                            x: x + i * 22,
+                            y: terrainY - 40,
+                            collected: false,
+                            value: 10
+                        });
+                    }
+                    x += 25 + Math.random() * 40;
                 }
             }
         }
@@ -918,11 +996,11 @@ const HillClimbGame = {
             if (dist < collectRadius) {
                 item.collected = true;
 
-                if (item.type === 'coin') {
-                    // Air bonus
-                    const multiplier = this.state.airTime > 0.5 ? 2 : 1;
+                if (item.type === 'coin' || item.type === 'giantcoin') {
+                    // Air bonus for regular coins
+                    const multiplier = (item.type === 'coin' && this.state.airTime > 0.5) ? 2 : 1;
                     this.state.coins += item.value * multiplier;
-                    this.spawnParticle(item.x, item.y, 'coin');
+                    this.spawnParticle(item.x, item.y, item.type === 'giantcoin' ? 'giantcoin' : 'coin');
                 } else if (item.type === 'fuel') {
                     this.state.fuel = Math.min(this.state.maxFuel, this.state.fuel + item.value);
                     this.spawnParticle(item.x, item.y, 'fuel');
