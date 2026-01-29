@@ -789,14 +789,21 @@ const HillClimbGame = {
             return;
         }
 
-        // Fuel consumption
-        let fuelConsumption = 0.3 * dt;
-        if (this.input.gas) fuelConsumption += 0.8 * dt;
+        // Fuel consumption - designed for 45-60 seconds of full-throttle driving
+        // At 100 fuel capacity: 0.028/frame * 60fps = 1.68/sec => ~60 seconds
+        const IDLE_DRAIN_RATE = 0.005;      // Minimal idle drain (coasting)
+        const THROTTLE_DRAIN_RATE = 0.028;  // Main drain when accelerating
+        const UPHILL_DRAIN_BONUS = 0.008;   // Extra drain on steep hills
 
-        // Uphill penalty
+        let fuelConsumption = IDLE_DRAIN_RATE * dt;
+        if (this.input.gas) {
+            fuelConsumption += THROTTLE_DRAIN_RATE * dt;
+        }
+
+        // Uphill penalty (steeper threshold, scaled by angle)
         const terrainAngle = this.getTerrainAngle(car.x);
-        if (terrainAngle < -0.2 && this.input.gas) {
-            fuelConsumption += 0.3 * dt;
+        if (terrainAngle < -0.25 && this.input.gas) {
+            fuelConsumption += UPHILL_DRAIN_BONUS * dt * Math.abs(terrainAngle);
         }
 
         this.state.fuel -= fuelConsumption;
