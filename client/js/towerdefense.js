@@ -2425,195 +2425,364 @@ const TowerDefenseRenderer = {
     renderUI() {
         const ctx = this.ctx;
         const panelX = 960;
+        const time = Date.now() / 1000;
 
-        // UI Panel background
-        ctx.fillStyle = '#161b22';
+        // UI Panel background with gradient
+        const gradient = ctx.createLinearGradient(panelX, 0, panelX + 240, 0);
+        gradient.addColorStop(0, '#1a1f2e');
+        gradient.addColorStop(1, '#161b22');
+        ctx.fillStyle = gradient;
         ctx.fillRect(panelX, 0, 240, 720);
+
+        // Panel border with glow
         ctx.strokeStyle = '#30363d';
         ctx.lineWidth = 2;
         ctx.strokeRect(panelX, 0, 240, 720);
 
-        // Title
-        ctx.fillStyle = '#f0f6fc';
-        ctx.font = 'bold 18px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('Tower Defense', panelX + 120, 30);
-
-        // Stats
-        ctx.textAlign = 'left';
-        ctx.font = '14px sans-serif';
-
-        // Gold
+        // Title with crown decoration
         ctx.fillStyle = '#ffd700';
-        ctx.fillText(`Gold: ${this.state.gold}`, panelX + 15, 60);
+        ctx.font = 'bold 10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('👑', panelX + 120, 18);
 
-        // Lives
-        ctx.fillStyle = '#f44336';
-        ctx.fillText(`Lives: ${this.state.lives}`, panelX + 120, 60);
+        ctx.fillStyle = '#f0f6fc';
+        ctx.font = 'bold 20px sans-serif';
+        ctx.fillText('Tower Defense', panelX + 120, 38);
 
-        // Wave
+        // Divider line
+        ctx.strokeStyle = '#30363d';
+        ctx.beginPath();
+        ctx.moveTo(panelX + 20, 50);
+        ctx.lineTo(panelX + 220, 50);
+        ctx.stroke();
+
+        // Stats section with icons
+        ctx.textAlign = 'left';
+
+        // Gold with coin icon
+        this.drawStatBox(ctx, panelX + 10, 58, 105, 35, '#ffd700', '💰', this.state.gold.toLocaleString());
+
+        // Lives with heart icon
+        this.drawStatBox(ctx, panelX + 125, 58, 105, 35, '#f44336', '❤️', this.state.lives.toString());
+
+        // Wave progress bar
+        ctx.fillStyle = '#21262d';
+        ctx.fillRect(panelX + 10, 100, 220, 25);
+        const waveProgress = this.state.wave / this.state.maxWaves;
+        const waveGradient = ctx.createLinearGradient(panelX + 10, 0, panelX + 230, 0);
+        waveGradient.addColorStop(0, '#4CAF50');
+        waveGradient.addColorStop(1, '#8BC34A');
+        ctx.fillStyle = waveGradient;
+        ctx.fillRect(panelX + 10, 100, 220 * waveProgress, 25);
+        ctx.strokeStyle = '#30363d';
+        ctx.strokeRect(panelX + 10, 100, 220, 25);
+
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(`Wave ${this.state.wave} / ${this.state.maxWaves}`, panelX + 120, 117);
+
+        // Score with animation
+        ctx.font = '11px sans-serif';
         ctx.fillStyle = '#8b949e';
-        ctx.fillText(`Wave: ${this.state.wave}/${this.state.maxWaves}`, panelX + 15, 85);
-
-        // Score
-        ctx.fillText(`Score: ${this.state.score}`, panelX + 120, 85);
+        ctx.fillText(`Score: ${this.state.score.toLocaleString()}`, panelX + 120, 138);
 
         // Fast forward indicator
         if (this.state.fastForward) {
             ctx.fillStyle = '#FF9800';
-            ctx.fillText('>> 2x Speed', panelX + 15, 110);
+            ctx.font = 'bold 12px sans-serif';
+            ctx.fillText('⚡ 2x SPEED ⚡', panelX + 120, 155);
         }
 
-        // Tower selection
+        // Tower selection header
         ctx.fillStyle = '#f0f6fc';
         ctx.font = 'bold 14px sans-serif';
-        ctx.fillText('Towers (1-8):', panelX + 15, 140);
+        ctx.textAlign = 'left';
+        ctx.fillText('🏰 Select Tower (1-8)', panelX + 15, 175);
 
+        // Tower buttons with improved styling
         const towerTypes = ['archer', 'cannon', 'mage', 'frost', 'poison', 'lightning', 'barracks', 'ultimate'];
-        const buttonHeight = 50;
-        const startY = 150;
+        const towerEmojis = ['🏹', '💣', '🔮', '❄️', '☠️', '⚡', '⚔️', '👑'];
+        const buttonHeight = 42;
+        const startY = 185;
 
         for (let i = 0; i < towerTypes.length; i++) {
             const type = towerTypes[i];
-            const btnY = startY + i * (buttonHeight + 10);
+            const btnY = startY + i * (buttonHeight + 4);
             const isSelected = this.selectedTowerType === type;
             const cost = this.TOWER_COSTS[type];
             const canAfford = this.state.gold >= cost;
             const isLocked = type === 'ultimate' && this.state.wave < 40;
 
-            // Button background
-            ctx.fillStyle = isSelected ? '#30363d' : '#21262d';
-            ctx.fillRect(panelX + 10, btnY, 220, buttonHeight);
+            // Button background with hover effect
+            if (isSelected) {
+                ctx.fillStyle = '#2d333b';
+            } else {
+                ctx.fillStyle = '#21262d';
+            }
+            ctx.beginPath();
+            ctx.roundRect(panelX + 10, btnY, 220, buttonHeight, 6);
+            ctx.fill();
 
+            // Selection border
             if (isSelected) {
                 ctx.strokeStyle = this.TOWER_COLORS[type];
                 ctx.lineWidth = 2;
-                ctx.strokeRect(panelX + 10, btnY, 220, buttonHeight);
+                ctx.stroke();
+
+                // Glow effect
+                ctx.shadowColor = this.TOWER_COLORS[type];
+                ctx.shadowBlur = 8;
+                ctx.stroke();
+                ctx.shadowBlur = 0;
             }
 
-            // Tower icon
+            // Tower emoji icon
+            ctx.font = '18px sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillStyle = isLocked ? '#555' : '#fff';
+            ctx.fillText(towerEmojis[i], panelX + 18, btnY + 28);
+
+            // Tower color indicator
             ctx.fillStyle = isLocked ? '#555' : this.TOWER_COLORS[type];
             ctx.beginPath();
-            ctx.arc(panelX + 35, btnY + 25, 12, 0, Math.PI * 2);
+            ctx.arc(panelX + 52, btnY + 21, 6, 0, Math.PI * 2);
             ctx.fill();
 
-            // Tower name and cost
-            ctx.fillStyle = isLocked ? '#555' : canAfford ? '#f0f6fc' : '#f44336';
-            ctx.font = '13px sans-serif';
-            ctx.textAlign = 'left';
-            ctx.fillText(`${i + 1}. ${type.charAt(0).toUpperCase() + type.slice(1)}`, panelX + 55, btnY + 22);
+            // Tower name
+            ctx.fillStyle = isLocked ? '#555' : canAfford ? '#f0f6fc' : '#888';
+            ctx.font = 'bold 12px sans-serif';
+            ctx.fillText(type.charAt(0).toUpperCase() + type.slice(1), panelX + 65, btnY + 18);
 
+            // Cost with coin
             ctx.fillStyle = isLocked ? '#555' : canAfford ? '#ffd700' : '#f44336';
             ctx.font = '11px sans-serif';
-            ctx.fillText(isLocked ? 'Wave 40' : `${cost} gold`, panelX + 55, btnY + 40);
+            ctx.fillText(isLocked ? '🔒 Wave 40' : `💰 ${cost}`, panelX + 65, btnY + 34);
+
+            // Keybind hint
+            ctx.fillStyle = '#6e7681';
+            ctx.font = '10px sans-serif';
+            ctx.textAlign = 'right';
+            ctx.fillText(`[${i + 1}]`, panelX + 222, btnY + 26);
+            ctx.textAlign = 'left';
         }
 
-        // Selected tower info
+        // Selected tower info panel
         if (this.selectedTower) {
-            ctx.fillStyle = '#30363d';
-            ctx.fillRect(panelX + 10, 480, 220, 130);
+            const infoY = 575;
+            ctx.fillStyle = '#2d333b';
+            ctx.beginPath();
+            ctx.roundRect(panelX + 10, infoY, 220, 75, 6);
+            ctx.fill();
+            ctx.strokeStyle = '#30363d';
+            ctx.stroke();
 
-            ctx.fillStyle = '#f0f6fc';
-            ctx.font = 'bold 14px sans-serif';
-            ctx.textAlign = 'left';
+            // Tower name and level with stars
             const towerName = this.selectedTower.type.charAt(0).toUpperCase() + this.selectedTower.type.slice(1);
-            ctx.fillText(`${towerName} (Lv ${this.selectedTower.level + 1})`, panelX + 20, 505);
+            ctx.fillStyle = '#f0f6fc';
+            ctx.font = 'bold 13px sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText(towerName, panelX + 20, infoY + 18);
 
+            // Level stars
+            ctx.fillStyle = '#ffd700';
+            const stars = '★'.repeat(this.selectedTower.level + 1) + '☆'.repeat(3 - this.selectedTower.level);
+            ctx.fillText(stars, panelX + 100, infoY + 18);
+
+            // Action buttons
             // Upgrade button
             if (this.selectedTower.level < 3) {
                 ctx.fillStyle = '#238636';
-                ctx.fillRect(panelX + 20, 520, 90, 35);
+                ctx.beginPath();
+                ctx.roundRect(panelX + 20, infoY + 28, 95, 32, 4);
+                ctx.fill();
                 ctx.fillStyle = '#fff';
-                ctx.font = '12px sans-serif';
+                ctx.font = 'bold 11px sans-serif';
                 ctx.textAlign = 'center';
-                ctx.fillText('Upgrade', panelX + 65, 542);
+                ctx.fillText('⬆️ Upgrade', panelX + 67, infoY + 48);
             }
 
             // Sell button
-            ctx.fillStyle = '#f44336';
-            ctx.fillRect(panelX + 130, 520, 90, 35);
+            ctx.fillStyle = '#da3633';
+            ctx.beginPath();
+            ctx.roundRect(panelX + 125, infoY + 28, 95, 32, 4);
+            ctx.fill();
             ctx.fillStyle = '#fff';
-            ctx.fillText('Sell', panelX + 175, 542);
+            ctx.fillText('💰 Sell', panelX + 172, infoY + 48);
 
-            // Targeting
+            // Targeting quick hint
             ctx.fillStyle = '#8b949e';
-            ctx.font = '11px sans-serif';
-            ctx.textAlign = 'left';
-            ctx.fillText('Target:', panelX + 20, 575);
-
-            const targets = ['first', 'last', 'strong', 'weak', 'close'];
-            const targetLabels = ['First', 'Last', 'Strong', 'Weak', 'Close'];
             ctx.font = '10px sans-serif';
-            for (let i = 0; i < targets.length; i++) {
-                const btnX = panelX + 20 + (i % 3) * 73;
-                const btnY = 580 + Math.floor(i / 3) * 28;
-                const isActive = this.selectedTower.targeting === i;
-
-                ctx.fillStyle = isActive ? '#238636' : '#21262d';
-                ctx.fillRect(btnX, btnY, 68, 24);
-
-                ctx.fillStyle = '#fff';
-                ctx.textAlign = 'center';
-                ctx.fillText(targetLabels[i], btnX + 34, btnY + 16);
-            }
+            ctx.textAlign = 'left';
+            ctx.fillText('Press S to sell, U to upgrade', panelX + 20, infoY + 70);
         }
 
         // Start wave button
+        const waveButtonY = 660;
         if (!this.state.waveActive && this.state.wave <= this.state.maxWaves) {
-            ctx.fillStyle = '#238636';
-            ctx.fillRect(panelX + 10, 660, 220, 50);
+            // Pulsing glow effect
+            const pulse = Math.sin(time * 4) * 0.1 + 0.9;
+            ctx.shadowColor = '#4CAF50';
+            ctx.shadowBlur = 10 * pulse;
+
+            const buttonGradient = ctx.createLinearGradient(panelX + 10, waveButtonY, panelX + 10, waveButtonY + 50);
+            buttonGradient.addColorStop(0, '#2ea043');
+            buttonGradient.addColorStop(1, '#238636');
+            ctx.fillStyle = buttonGradient;
+            ctx.beginPath();
+            ctx.roundRect(panelX + 10, waveButtonY, 220, 50, 8);
+            ctx.fill();
+            ctx.shadowBlur = 0;
 
             ctx.fillStyle = '#fff';
             ctx.font = 'bold 16px sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText('Start Wave (Space)', panelX + 120, 692);
+            ctx.fillText('▶ Start Wave', panelX + 120, waveButtonY + 28);
+            ctx.font = '11px sans-serif';
+            ctx.fillStyle = 'rgba(255,255,255,0.7)';
+            ctx.fillText('Press SPACE', panelX + 120, waveButtonY + 44);
         } else if (this.state.waveActive) {
             ctx.fillStyle = '#21262d';
-            ctx.fillRect(panelX + 10, 660, 220, 50);
+            ctx.beginPath();
+            ctx.roundRect(panelX + 10, waveButtonY, 220, 50, 8);
+            ctx.fill();
 
+            // Animated loading dots
+            const dots = '.'.repeat(Math.floor(time * 3) % 4);
             ctx.fillStyle = '#FF9800';
             ctx.font = 'bold 16px sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText('Wave in Progress...', panelX + 120, 692);
+            ctx.fillText(`⏳ Wave in Progress${dots}`, panelX + 120, waveButtonY + 32);
         }
 
-        // Controls help
-        ctx.fillStyle = '#6e7681';
-        ctx.font = '10px sans-serif';
+        // Controls help at bottom
+        ctx.fillStyle = '#484f58';
+        ctx.font = '9px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('F: Speed | S: Sell | U: Upgrade | Right-click: Deselect', panelX + 120, 716);
+    },
+
+    // Helper to draw stat boxes
+    drawStatBox(ctx, x, y, w, h, color, icon, value) {
+        // Background
+        ctx.fillStyle = '#21262d';
+        ctx.beginPath();
+        ctx.roundRect(x, y, w, h, 4);
+        ctx.fill();
+
+        // Icon
+        ctx.font = '14px sans-serif';
         ctx.textAlign = 'left';
-        ctx.fillText('F: Fast Forward | S: Sell | U: Upgrade', panelX + 15, 715);
+        ctx.fillText(icon, x + 8, y + 24);
+
+        // Value
+        ctx.fillStyle = color;
+        ctx.font = 'bold 14px sans-serif';
+        ctx.fillText(value, x + 32, y + 24);
     },
 
     renderEndScreen() {
         const ctx = this.ctx;
+        const time = Date.now() / 1000;
 
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        // Dark overlay
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
         ctx.fillRect(0, 0, 960, 720);
 
         ctx.textAlign = 'center';
 
         if (this.state.victory) {
+            // Victory celebration
+            // Golden particles
+            ctx.fillStyle = '#ffd700';
+            for (let i = 0; i < 20; i++) {
+                const px = 480 + Math.sin(time * 2 + i * 0.5) * 200;
+                const py = 200 + ((time * 50 + i * 30) % 400);
+                const size = 3 + Math.sin(time * 3 + i) * 2;
+                ctx.globalAlpha = 1 - py / 600;
+                ctx.beginPath();
+                ctx.arc(px, py, size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.globalAlpha = 1;
+
+            // Crown emoji
+            ctx.font = '60px sans-serif';
+            ctx.fillText('👑', 480, 220);
+
+            // Victory text with glow
+            ctx.shadowColor = '#4CAF50';
+            ctx.shadowBlur = 20;
             ctx.fillStyle = '#4CAF50';
-            ctx.font = 'bold 48px sans-serif';
+            ctx.font = 'bold 56px sans-serif';
             ctx.fillText('VICTORY!', 480, 300);
+            ctx.shadowBlur = 0;
 
-            ctx.fillStyle = '#f0f6fc';
+            ctx.fillStyle = '#81c784';
             ctx.font = '24px sans-serif';
-            ctx.fillText('You defeated the Demon King!', 480, 360);
-        } else {
-            ctx.fillStyle = '#f44336';
-            ctx.font = 'bold 48px sans-serif';
-            ctx.fillText('GAME OVER', 480, 300);
+            ctx.fillText('🏆 You defeated the Demon King! 🏆', 480, 360);
 
-            ctx.fillStyle = '#f0f6fc';
+        } else {
+            // Game over effects
+            // Falling embers
+            ctx.fillStyle = '#f44336';
+            for (let i = 0; i < 15; i++) {
+                const px = 480 + Math.sin(time + i * 0.7) * 180;
+                const py = 150 + ((time * 40 + i * 25) % 350);
+                ctx.globalAlpha = 0.5 - py / 800;
+                ctx.beginPath();
+                ctx.arc(px, py, 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.globalAlpha = 1;
+
+            // Skull emoji
+            ctx.font = '60px sans-serif';
+            ctx.fillText('💀', 480, 220);
+
+            // Game over text with glow
+            ctx.shadowColor = '#f44336';
+            ctx.shadowBlur = 20;
+            ctx.fillStyle = '#f44336';
+            ctx.font = 'bold 56px sans-serif';
+            ctx.fillText('GAME OVER', 480, 300);
+            ctx.shadowBlur = 0;
+
+            ctx.fillStyle = '#ef9a9a';
             ctx.font = '24px sans-serif';
             ctx.fillText('The castle has fallen...', 480, 360);
         }
 
+        // Stats box
+        ctx.fillStyle = 'rgba(33, 38, 45, 0.9)';
+        ctx.beginPath();
+        ctx.roundRect(330, 400, 300, 140, 12);
+        ctx.fill();
+        ctx.strokeStyle = '#30363d';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Final stats
+        ctx.fillStyle = '#f0f6fc';
+        ctx.font = 'bold 14px sans-serif';
+        ctx.fillText('📊 FINAL STATS', 480, 430);
+
+        ctx.font = '18px sans-serif';
         ctx.fillStyle = '#ffd700';
-        ctx.font = '20px sans-serif';
-        ctx.fillText(`Final Score: ${this.state.score}`, 480, 420);
-        ctx.fillText(`Waves Completed: ${this.state.wave - 1}`, 480, 450);
+        ctx.fillText(`🏅 Score: ${this.state.score.toLocaleString()}`, 480, 465);
+
+        ctx.fillStyle = '#8b949e';
+        ctx.font = '16px sans-serif';
+        ctx.fillText(`📋 Waves Completed: ${this.state.wave - 1} / ${this.state.maxWaves}`, 480, 495);
+
+        // Towers built count
+        const towerCount = this.state.towers ? this.state.towers.length : 0;
+        ctx.fillText(`🏰 Towers Built: ${towerCount}`, 480, 520);
+
+        // Restart hint
+        ctx.fillStyle = '#6e7681';
+        ctx.font = '14px sans-serif';
+        ctx.fillText('Click "Restart Game" to play again', 480, 570);
     },
 
     cleanup() {
