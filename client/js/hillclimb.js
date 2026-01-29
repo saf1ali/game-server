@@ -350,26 +350,61 @@ const HillClimbGame = {
         const baseHeight = this.canvas.height - 150;
         let height = baseHeight;
 
-        // Fractional Brownian Motion with 4 octaves
-        let amplitude = 1.0;
-        let frequency = 0.003;
-        const maxHeight = 200;
+        // Convert pixel position to "meters" (10 pixels = 1 meter)
+        const distanceMeters = x / 10;
 
-        for (let i = 0; i < 4; i++) {
+        // Progressive difficulty zones
+        // Zone 1: 0-500m - Nearly flat (max ~10 degree slopes)
+        // Zone 2: 500-1000m - Gentle hills (max ~20 degrees)
+        // Zone 3: 1000m+ - Progressive challenge
+        let amplitudeScale;
+        let frequencyScale;
+
+        if (distanceMeters < 500) {
+            // First 500 meters: very gentle
+            amplitudeScale = 0.12 + (distanceMeters / 500) * 0.18;  // 0.12 to 0.30
+            frequencyScale = 0.4;
+        } else if (distanceMeters < 1000) {
+            // 500-1000m: gentle hills
+            const progress = (distanceMeters - 500) / 500;
+            amplitudeScale = 0.30 + progress * 0.25;  // 0.30 to 0.55
+            frequencyScale = 0.5 + progress * 0.2;
+        } else {
+            // 1000m+: progressive challenge (caps around 3000m)
+            const progress = Math.min((distanceMeters - 1000) / 2000, 1.0);
+            amplitudeScale = 0.55 + progress * 0.45;  // 0.55 to 1.0
+            frequencyScale = 0.7 + progress * 0.3;
+        }
+
+        // Base terrain with REDUCED frequency and amplitude
+        const baseFrequency = 0.0012 * frequencyScale;  // Much lower than 0.003
+        const maxHeight = 120 * amplitudeScale;          // Reduced from 200
+
+        // Fractional Brownian Motion with 3 octaves (reduced from 4)
+        let amplitude = 1.0;
+        let frequency = baseFrequency;
+
+        for (let i = 0; i < 3; i++) {
             height -= this.noise.simplex2D(x * frequency, 0) * amplitude * maxHeight;
             amplitude *= 0.5;
             frequency *= 2.0;
         }
 
-        // Increase difficulty with distance
-        const distanceFactor = Math.min(x / 8000, 1.5);
-        const difficultyAmplitude = 50 * distanceFactor;
-        height -= this.noise.simplex2D(x * 0.008, 100) * difficultyAmplitude;
+        // Flat "rest areas" every ~300 meters (procedural)
+        const restAreaPeriod = 300;
+        const restAreaWidth = 50;
+        const restAreaPosition = distanceMeters % restAreaPeriod;
 
-        // Starting area is flat
-        if (x < 200) {
-            const flatHeight = baseHeight;
-            const blend = x / 200;
+        if (restAreaPosition < restAreaWidth && distanceMeters > 150) {
+            const flatBlend = Math.sin(restAreaPosition / restAreaWidth * Math.PI);
+            const flatHeight = baseHeight - 30;
+            height = height * (1 - flatBlend * 0.6) + flatHeight * (flatBlend * 0.6);
+        }
+
+        // Extended flat starting area (first 150 meters / 1500 pixels)
+        if (x < 1500) {
+            const flatHeight = baseHeight - 15;
+            const blend = Math.pow(x / 1500, 2);  // Quadratic for smoother transition
             height = flatHeight * (1 - blend) + height * blend;
         }
 
