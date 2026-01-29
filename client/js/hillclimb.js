@@ -153,12 +153,12 @@ const HillClimbGame = {
     // Mouse state for garage UI
     mouse: { x: 0, y: 0, clicked: false },
 
-    // Physics constants - stable with good handling
+    // Physics constants - gentle arcade-style
     physics: {
-        gravity: 0.55,
-        springStiffness: 0.4,
-        springDamping: 0.2,
-        springRestLength: 20,
+        gravity: 0.4,
+        springStiffness: 0.15,
+        springDamping: 0.25,
+        springRestLength: 15,
         friction: 0.8,
         airRotationSpeed: 0.004,
         groundFriction: 0.99,
@@ -345,8 +345,9 @@ const HillClimbGame = {
         this.crashGraceTimer = 0;
         this.lastBadLandingTime = 0;
 
-        // Position car on ground
-        this.state.car.y = this.getTerrainHeight(100) - 30;
+        // Position car properly above ground (wheelRadius + springRestLength + buffer)
+        const spawnHeight = vehicle.wheelRadius + this.physics.springRestLength + 5;
+        this.state.car.y = this.getTerrainHeight(100) - spawnHeight;
 
         // Reset camera
         this.camera.x = this.state.car.x - 200;
@@ -859,6 +860,9 @@ const HillClimbGame = {
         // Limit max speed
         const maxSpeed = vehicle.maxSpeed * engineMultiplier;
         car.vx = Math.max(-maxSpeed * 0.5, Math.min(maxSpeed, car.vx));
+
+        // Clamp vertical velocity to prevent extreme bouncing
+        car.vy = Math.max(-15, Math.min(15, car.vy));
 
         // Apply velocity
         car.x += car.vx;
