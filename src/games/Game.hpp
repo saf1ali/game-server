@@ -75,8 +75,9 @@ public:
     /**
      * Called when a player joins mid-game (if allowed).
      * @param playerId The new player's index
+     * @param username The player's display name
      */
-    virtual void onPlayerJoin(int playerId) {}
+    virtual void onPlayerJoin(int playerId, const std::string& username = "") {}
 
     /**
      * Called when a player leaves.
@@ -106,7 +107,7 @@ public:
      * Get list of all available game types.
      */
     static std::vector<std::string> getAvailableTypes() {
-        return {"pong", "snake", "chat", "tetris", "checkers", "connect4", "slither"};
+        return {"pong", "snake", "chat", "tetris", "checkers", "connect4", "slither", "towerdefense"};
     }
 
 protected:
