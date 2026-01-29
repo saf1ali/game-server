@@ -153,16 +153,16 @@ const HillClimbGame = {
     // Mouse state for garage UI
     mouse: { x: 0, y: 0, clicked: false },
 
-    // Physics constants - gentle arcade-style
+    // Physics constants (tuned for dt-scaled physics)
     physics: {
-        gravity: 0.4,
-        springStiffness: 0.15,
-        springDamping: 0.25,
+        gravity: 0.8,
+        springStiffness: 0.2,
+        springDamping: 0.3,
         springRestLength: 15,
         friction: 0.8,
-        airRotationSpeed: 0.004,
-        groundFriction: 0.99,
-        airDrag: 0.998
+        airRotationSpeed: 0.08,
+        groundFriction: 0.98,
+        airDrag: 0.995
     },
 
     // Wheels state
@@ -345,9 +345,8 @@ const HillClimbGame = {
         this.crashGraceTimer = 0;
         this.lastBadLandingTime = 0;
 
-        // Position car properly above ground (wheelRadius + springRestLength + buffer)
-        const spawnHeight = vehicle.wheelRadius + this.physics.springRestLength + 5;
-        this.state.car.y = this.getTerrainHeight(100) - spawnHeight;
+        // Position car above ground (simple: ground level minus wheel radius minus small buffer)
+        this.state.car.y = this.getTerrainHeight(100) - vehicle.wheelRadius - 10;
 
         // Reset camera
         this.camera.x = this.state.car.x - 200;
@@ -738,7 +737,7 @@ const HillClimbGame = {
     },
 
     // ============================================
-    // PHYSICS UPDATE
+    // PHYSICS UPDATE (with proper dt scaling)
     // ============================================
     update(dt) {
         if (this.state.showGarage || this.state.paused || this.state.gameOver) return;
@@ -747,7 +746,7 @@ const HillClimbGame = {
         const vehicle = this.vehicles[this.save.selectedVehicle];
         const upgrades = this.save.upgrades[this.save.selectedVehicle] || { engine: 1, suspension: 1, tires: 1, fuel: 1 };
 
-        // Calculate upgraded stats
+        // Calculate upgraded stats (suspension makes springs STRONGER, not weaker)
         const engineMultiplier = 1 + (upgrades.engine - 1) * 0.15;
         const suspensionMultiplier = 1 + (upgrades.suspension - 1) * 0.1;
         const tireGrip = 1 + (upgrades.tires - 1) * 0.1;
@@ -766,121 +765,110 @@ const HillClimbGame = {
         const frontGroundY = this.getTerrainHeight(frontWheelX);
         const rearGroundY = this.getTerrainHeight(rearWheelX);
 
-        // Spring-damper suspension
-        const restLength = this.physics.springRestLength * suspensionMultiplier;
-        const stiffness = this.physics.springStiffness / suspensionMultiplier;
-        const damping = this.physics.springDamping;
+        // Simplified ground detection: wheel touches ground if close enough
+        const wheelBottom = vehicle.wheelRadius;
+        const frontPenetration = (frontWheelY + wheelBottom) - frontGroundY;
+        const rearPenetration = (rearWheelY + wheelBottom) - rearGroundY;
 
-        // Front wheel suspension
-        const frontDist = frontGroundY - frontWheelY - vehicle.wheelRadius;
-        this.wheels.front.grounded = frontDist < restLength;
+        this.wheels.front.grounded = frontPenetration > -5;
+        this.wheels.rear.grounded = rearPenetration > -5;
         this.wheels.front.groundY = frontGroundY;
-
-        let frontSpringForce = 0;
-        if (this.wheels.front.grounded) {
-            const compression = restLength - frontDist;
-            this.wheels.front.compression = compression;
-            frontSpringForce = compression * stiffness - car.vy * damping;
-        }
-
-        // Rear wheel suspension
-        const rearDist = rearGroundY - rearWheelY - vehicle.wheelRadius;
-        this.wheels.rear.grounded = rearDist < restLength;
         this.wheels.rear.groundY = rearGroundY;
-
-        let rearSpringForce = 0;
-        if (this.wheels.rear.grounded) {
-            const compression = restLength - rearDist;
-            this.wheels.rear.compression = compression;
-            rearSpringForce = compression * stiffness - car.vy * damping;
-        }
 
         const isGrounded = this.wheels.front.grounded || this.wheels.rear.grounded;
 
-        // Apply gravity
-        car.vy += this.physics.gravity;
+        // Apply gravity (scaled by dt)
+        car.vy += this.physics.gravity * dt;
 
-        // Apply spring forces
-        if (this.wheels.front.grounded) {
-            car.vy -= frontSpringForce / vehicle.mass;
-        }
-        if (this.wheels.rear.grounded) {
-            car.vy -= rearSpringForce / vehicle.mass;
+        // Simple ground collision - keep car above terrain
+        const groundY = this.getTerrainHeight(car.x);
+        const carBottom = car.y + vehicle.wheelRadius + 5;
+
+        if (carBottom > groundY) {
+            // Car is touching/below ground - push up and apply friction
+            car.y = groundY - vehicle.wheelRadius - 5;
+
+            // Dampen vertical velocity on ground contact
+            if (car.vy > 0) {
+                car.vy *= -0.3; // Small bounce
+                if (Math.abs(car.vy) < 0.5) car.vy = 0;
+            }
         }
 
-        // Terrain following rotation
+        // Store compression for visual suspension
+        this.wheels.front.compression = Math.max(0, frontPenetration + 5);
+        this.wheels.rear.compression = Math.max(0, rearPenetration + 5);
+
+        // Terrain following rotation (smooth, scaled by dt)
         if (isGrounded) {
             const targetAngle = this.getTerrainAngle(car.x);
             const angleDiff = targetAngle - car.rotation;
-            car.angularVelocity += angleDiff * 0.1;
-            car.angularVelocity *= 0.85;
+
+            // Smoothly rotate towards terrain angle
+            car.angularVelocity += angleDiff * 0.15 * dt;
+            car.angularVelocity *= Math.pow(0.9, dt); // Damping
         }
 
         // Controls
         if (isGrounded) {
-            // Ground controls
+            // Ground controls - acceleration scaled by dt
             if (this.input.gas) {
                 const accel = vehicle.accel * engineMultiplier * tireGrip;
-                car.vx += accel * cosR;
+                car.vx += accel * cosR * dt;
             }
             if (this.input.brake) {
                 // Brake or reverse
                 if (car.vx > 0.5) {
-                    car.vx *= 0.95;
+                    car.vx *= Math.pow(0.92, dt); // Brake
                 } else {
-                    car.vx -= vehicle.accel * 0.5 * engineMultiplier;
+                    car.vx -= vehicle.accel * 0.4 * engineMultiplier * dt;
                 }
             }
 
-            // Ground friction
-            car.vx *= this.physics.groundFriction;
+            // Ground friction (exponential decay scaled by dt)
+            car.vx *= Math.pow(0.98, dt);
 
             // Track air time for bonus
             this.state.airTime = 0;
         } else {
-            // Air controls - rotate vehicle
+            // Air controls - rotate vehicle (scaled by dt)
             if (this.input.gas) {
-                car.angularVelocity += this.physics.airRotationSpeed;
+                car.angularVelocity += this.physics.airRotationSpeed * dt;
             }
             if (this.input.brake) {
-                car.angularVelocity -= this.physics.airRotationSpeed;
+                car.angularVelocity -= this.physics.airRotationSpeed * dt;
             }
 
-            // Air drag
-            car.vx *= this.physics.airDrag;
-            car.vy *= this.physics.airDrag;
+            // Air drag (exponential decay scaled by dt)
+            car.vx *= Math.pow(0.995, dt);
+            car.vy *= Math.pow(0.995, dt);
 
             // Track air time
             this.state.airTime += dt;
         }
 
-        // Apply rotation
-        car.rotation += car.angularVelocity;
+        // Apply rotation (scaled by dt)
+        car.rotation += car.angularVelocity * dt;
+
+        // Clamp angular velocity
+        car.angularVelocity = Math.max(-0.1, Math.min(0.1, car.angularVelocity));
 
         // Limit max speed
         const maxSpeed = vehicle.maxSpeed * engineMultiplier;
         car.vx = Math.max(-maxSpeed * 0.5, Math.min(maxSpeed, car.vx));
 
-        // Clamp vertical velocity to prevent extreme bouncing
-        car.vy = Math.max(-15, Math.min(15, car.vy));
+        // Clamp vertical velocity
+        car.vy = Math.max(-12, Math.min(12, car.vy));
 
-        // Apply velocity
-        car.x += car.vx;
-        car.y += car.vy;
+        // Apply velocity (scaled by dt)
+        car.x += car.vx * dt;
+        car.y += car.vy * dt;
 
         // Wheel rotation for visual effect
         if (isGrounded) {
-            const wheelSpeed = car.vx / vehicle.wheelRadius;
+            const wheelSpeed = car.vx / vehicle.wheelRadius * dt;
             this.wheels.front.rotation += wheelSpeed;
             this.wheels.rear.rotation += wheelSpeed;
-        }
-
-        // Collision with ground (prevent sinking)
-        const carGroundY = this.getTerrainHeight(car.x);
-        const minY = carGroundY - vehicle.wheelRadius - this.physics.springRestLength;
-        if (car.y > minY) {
-            car.y = minY;
-            if (car.vy > 0) car.vy = 0;
         }
 
         // Track rotation for flip detection
