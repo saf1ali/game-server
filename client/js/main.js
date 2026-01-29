@@ -140,6 +140,9 @@ const Game = {
         } else if (type === 'chat') {
             this.renderer = ChatRenderer;
             this.renderer.init();
+        } else if (type === 'towerdefense') {
+            this.renderer = TowerDefenseRenderer;
+            this.renderer.init(canvas);
         }
 
         // Initialize in-game chat for all games except chat room
