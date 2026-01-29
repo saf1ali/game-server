@@ -27,6 +27,7 @@ set(SOURCES
     src/games/ConnectFourGame.cpp
     src/games/SlitherGame.cpp
     src/games/TowerDefenseGame.cpp
+    src/games/AgarGame.cpp
 )
 
 # Header files
