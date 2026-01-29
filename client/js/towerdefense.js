@@ -1,4 +1,4 @@
-// Tower Defense game renderer
+// Tower Defense game renderer with BTD-style branching upgrades
 const TowerDefenseRenderer = {
     canvas: null,
     ctx: null,
@@ -8,6 +8,7 @@ const TowerDefenseRenderer = {
     selectedTowerType: 'archer',
     hoveredCell: null,
     showRangeFor: null,
+    showUpgradePopout: false,
 
     // Tower colors
     TOWER_COLORS: {
@@ -52,6 +53,190 @@ const TowerDefenseRenderer = {
         ultimate: 1000
     },
 
+    // Tower ranges (must match server TOWER_STATS)
+    TOWER_RANGES: {
+        archer: 150,
+        cannon: 120,
+        mage: 140,
+        frost: 130,
+        poison: 120,
+        lightning: 160,
+        barracks: 80,
+        ultimate: 200
+    },
+
+    // BTD-style upgrade trees - matches server UPGRADE_DEFS
+    UPGRADE_TREES: {
+        archer: {
+            name: 'Archer',
+            pathA: {
+                name: 'Damage',
+                tiers: [
+                    { name: 'Sharp Arrows', cost: 75, desc: '+50% damage' },
+                    { name: 'Piercing Shot', cost: 150, desc: 'Arrows pierce 2 enemies' },
+                    { name: 'Fire Arrows', cost: 300, desc: 'Burn enemies for 8 DPS over 3s', choice: 'A' },
+                    { name: 'Ice Arrows', cost: 300, desc: '40% slow for 2s on hit', choice: 'B' }
+                ]
+            },
+            pathB: {
+                name: 'Speed',
+                tiers: [
+                    { name: 'Quick Draw', cost: 75, desc: '+30% attack speed' },
+                    { name: 'Eagle Eye', cost: 150, desc: '+40% range' },
+                    { name: 'Rapid Fire', cost: 350, desc: '+100% attack speed', choice: 'A' },
+                    { name: 'Sniper', cost: 350, desc: '+100% range, 2x dmg to first', choice: 'B' }
+                ]
+            }
+        },
+        cannon: {
+            name: 'Cannon',
+            pathA: {
+                name: 'Explosion',
+                tiers: [
+                    { name: 'Bigger Bombs', cost: 100, desc: '+25% explosion radius' },
+                    { name: 'Heavy Ordnance', cost: 200, desc: '+50% damage' },
+                    { name: 'Napalm Shells', cost: 400, desc: 'Fire patches burn for 4s', choice: 'A' },
+                    { name: 'Concussion Blast', cost: 400, desc: 'Stun enemies for 1.5s', choice: 'B' }
+                ]
+            },
+            pathB: {
+                name: 'Fire Rate',
+                tiers: [
+                    { name: 'Faster Reload', cost: 100, desc: '+25% attack speed' },
+                    { name: 'Double Barrel', cost: 225, desc: 'Fire 2 cannonballs per shot' },
+                    { name: 'Cluster Bombs', cost: 450, desc: 'Shells split into 4 mini-bombs', choice: 'A' },
+                    { name: 'Artillery', cost: 450, desc: '+150% range, slower fire', choice: 'B' }
+                ]
+            }
+        },
+        mage: {
+            name: 'Mage',
+            pathA: {
+                name: 'Power',
+                tiers: [
+                    { name: 'Arcane Mastery', cost: 100, desc: '+40% damage' },
+                    { name: 'Spell Surge', cost: 200, desc: 'Every 5th attack = 3x damage' },
+                    { name: 'Archmage', cost: 500, desc: 'Bolts chain to 3 enemies', choice: 'A' },
+                    { name: 'Void Mage', cost: 500, desc: 'True damage ignores armor', choice: 'B' }
+                ]
+            },
+            pathB: {
+                name: 'Utility',
+                tiers: [
+                    { name: 'Mystic Reach', cost: 100, desc: '+35% range' },
+                    { name: 'Enchantment', cost: 225, desc: '20% chance remove buffs' },
+                    { name: 'Necromancer', cost: 550, desc: '30% kill = spawn skeleton', choice: 'A' },
+                    { name: 'Time Mage', cost: 550, desc: 'Slow attack speed 50%', choice: 'B' }
+                ]
+            }
+        },
+        frost: {
+            name: 'Frost',
+            pathA: {
+                name: 'Freeze',
+                tiers: [
+                    { name: 'Deeper Freeze', cost: 100, desc: '50% slow (up from 40%)' },
+                    { name: 'Permafrost', cost: 200, desc: 'Slow persists 2s after' },
+                    { name: 'Absolute Zero', cost: 450, desc: 'Freeze solid for 2s', choice: 'A' },
+                    { name: 'Frost Nova', cost: 450, desc: 'Every 8s slow all 30%', choice: 'B' }
+                ]
+            },
+            pathB: {
+                name: 'Damage',
+                tiers: [
+                    { name: 'Ice Shards', cost: 100, desc: 'Attacks deal 15 damage' },
+                    { name: 'Brittle', cost: 225, desc: 'Slowed = +25% dmg taken' },
+                    { name: 'Cryo Cannon', cost: 500, desc: 'Heavy single-target ice', choice: 'A' },
+                    { name: 'Blizzard', cost: 500, desc: 'Constant AOE damage', choice: 'B' }
+                ]
+            }
+        },
+        poison: {
+            name: 'Poison',
+            pathA: {
+                name: 'Potency',
+                tiers: [
+                    { name: 'Concentrated Venom', cost: 75, desc: '+50% DoT damage' },
+                    { name: 'Corrosive Acid', cost: 175, desc: 'DoT reduces armor 20%' },
+                    { name: 'Plague', cost: 400, desc: 'DoT spreads to nearby', choice: 'A' },
+                    { name: 'Neurotoxin', cost: 400, desc: 'Poisoned = 40% slower', choice: 'B' }
+                ]
+            },
+            pathB: {
+                name: 'Application',
+                tiers: [
+                    { name: 'Wider Spray', cost: 75, desc: '+30% range' },
+                    { name: 'Rapid Injection', cost: 175, desc: '+40% attack speed' },
+                    { name: 'Gas Cloud', cost: 425, desc: 'Leave poison clouds 4s', choice: 'A' },
+                    { name: 'Venomous Burst', cost: 425, desc: 'Poison death = AOE', choice: 'B' }
+                ]
+            }
+        },
+        lightning: {
+            name: 'Lightning',
+            pathA: {
+                name: 'Chain',
+                tiers: [
+                    { name: 'Conductivity', cost: 125, desc: 'Chain to 4 targets' },
+                    { name: 'High Voltage', cost: 250, desc: '+60% chain damage' },
+                    { name: 'Storm Caller', cost: 550, desc: 'Every 10s hit 10 random', choice: 'A' },
+                    { name: 'Tesla Coil', cost: 550, desc: 'Constant passive damage', choice: 'B' }
+                ]
+            },
+            pathB: {
+                name: 'Single Target',
+                tiers: [
+                    { name: 'Focused Bolt', cost: 125, desc: '+50% primary damage' },
+                    { name: 'Overcharge', cost: 250, desc: 'Stun primary 0.5s' },
+                    { name: 'Thunderstrike', cost: 600, desc: 'Massive hit, 3s CD', choice: 'A' },
+                    { name: 'EMP', cost: 600, desc: 'Disable abilities 5s', choice: 'B' }
+                ]
+            }
+        },
+        barracks: {
+            name: 'Barracks',
+            pathA: {
+                name: 'Strength',
+                tiers: [
+                    { name: 'Combat Training', cost: 125, desc: '+50% soldier HP/dmg' },
+                    { name: 'Veteran Soldiers', cost: 275, desc: '+30% attack speed' },
+                    { name: 'Knights', cost: 500, desc: 'Block 2 enemies each', choice: 'A' },
+                    { name: 'Berserkers', cost: 500, desc: '+100% dmg, -25% HP', choice: 'B' }
+                ]
+            },
+            pathB: {
+                name: 'Count',
+                tiers: [
+                    { name: 'Reinforcements', cost: 150, desc: 'Spawn 2 soldiers' },
+                    { name: 'Battalion', cost: 300, desc: 'Spawn 3 soldiers' },
+                    { name: 'Army', cost: 550, desc: 'Spawn 5 soldiers', choice: 'A' },
+                    { name: 'Elite Guard', cost: 550, desc: '3 elite, mid-wave respawn', choice: 'B' }
+                ]
+            }
+        },
+        ultimate: {
+            name: 'Ultimate',
+            pathA: {
+                name: 'Destruction',
+                tiers: [
+                    { name: 'Empowered', cost: 250, desc: '+30% damage' },
+                    { name: 'Devastation', cost: 500, desc: '+50% AOE radius' },
+                    { name: 'Apocalypse', cost: 1000, desc: 'Screen pulse every 15s', choice: 'A' },
+                    { name: 'Godslayer', cost: 1000, desc: '+500% damage to bosses', choice: 'B' }
+                ]
+            },
+            pathB: {
+                name: 'Support',
+                tiers: [
+                    { name: 'Inspiring Presence', cost: 250, desc: 'Nearby towers +10% dmg' },
+                    { name: 'War Banner', cost: 500, desc: 'Nearby +15% attack speed' },
+                    { name: 'Fortress', cost: 1000, desc: 'Nearby towers +25% range', choice: 'A' },
+                    { name: 'Command Center', cost: 1000, desc: 'All towers +10% dmg/spd', choice: 'B' }
+                ]
+            }
+        }
+    },
+
     init(canvas) {
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d');
@@ -62,7 +247,6 @@ const TowerDefenseRenderer = {
     },
 
     setupInput() {
-        // Mouse move for hover effects
         this.canvas.addEventListener('mousemove', (e) => {
             const rect = this.canvas.getBoundingClientRect();
             const x = e.clientX - rect.left;
@@ -80,7 +264,6 @@ const TowerDefenseRenderer = {
                 }
             }
 
-            // Check if hovering over tower for range display
             this.showRangeFor = null;
             if (this.state && this.state.towers) {
                 for (const tower of this.state.towers) {
@@ -95,11 +278,17 @@ const TowerDefenseRenderer = {
             }
         });
 
-        // Click to place/select towers
         this.canvas.addEventListener('click', (e) => {
             const rect = this.canvas.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
+
+            // Check upgrade popout clicks first
+            if (this.showUpgradePopout && this.selectedTower) {
+                if (this.handleUpgradePopoutClick(x, y)) {
+                    return;
+                }
+            }
 
             // Check if clicking on UI panel (right side)
             if (x > 960) {
@@ -117,139 +306,193 @@ const TowerDefenseRenderer = {
                 for (const tower of this.state.towers) {
                     if (tower.x === gridX && tower.y === gridY) {
                         this.selectedTower = tower;
+                        this.showUpgradePopout = true;
                         return;
                     }
                 }
+            }
+
+            // Clicking elsewhere closes popout and deselects tower
+            if (this.showUpgradePopout) {
+                this.showUpgradePopout = false;
+                this.selectedTower = null;
+                return;
             }
 
             // Try to place tower
             this.selectedTower = null;
             if (this.canPlaceTower(gridX, gridY)) {
                 socket.send('input', {
-                    action: 'place_tower',
-                    type: this.selectedTowerType,
+                    action: 'placeTower',
+                    towerType: this.selectedTowerType,
                     x: gridX,
                     y: gridY
                 });
             }
         });
 
-        // Right click to deselect
-        this.canvas.addEventListener('contextmenu', (e) => {
-            e.preventDefault();
-            this.selectedTower = null;
-        });
-
-        // Keyboard shortcuts
-        document.addEventListener('keydown', (e) => {
-            if (!this.state) return;
-
-            switch (e.key) {
-                case ' ':
-                    e.preventDefault();
-                    if (!this.state.waveActive) {
-                        socket.send('input', { action: 'start_wave' });
-                    }
-                    break;
-                case 'f':
-                    socket.send('input', { action: 'fast_forward', enabled: !this.state.fastForward });
-                    break;
-                case '1': this.selectedTowerType = 'archer'; break;
-                case '2': this.selectedTowerType = 'cannon'; break;
-                case '3': this.selectedTowerType = 'mage'; break;
-                case '4': this.selectedTowerType = 'frost'; break;
-                case '5': this.selectedTowerType = 'poison'; break;
-                case '6': this.selectedTowerType = 'lightning'; break;
-                case '7': this.selectedTowerType = 'barracks'; break;
-                case '8': this.selectedTowerType = 'ultimate'; break;
-                case 's':
-                    if (this.selectedTower) {
-                        socket.send('input', { action: 'sell_tower', towerId: this.selectedTower.id });
-                        this.selectedTower = null;
-                    }
-                    break;
-                case 'u':
-                    if (this.selectedTower) {
-                        socket.send('input', { action: 'upgrade_tower', towerId: this.selectedTower.id });
-                    }
-                    break;
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                this.selectedTower = null;
+                this.showUpgradePopout = false;
+            }
+            if (e.key === '1') this.selectedTowerType = 'archer';
+            if (e.key === '2') this.selectedTowerType = 'cannon';
+            if (e.key === '3') this.selectedTowerType = 'mage';
+            if (e.key === '4') this.selectedTowerType = 'frost';
+            if (e.key === '5') this.selectedTowerType = 'poison';
+            if (e.key === '6') this.selectedTowerType = 'lightning';
+            if (e.key === '7') this.selectedTowerType = 'barracks';
+            if (e.key === '8') this.selectedTowerType = 'ultimate';
+            if (e.key === ' ') {
+                e.preventDefault();
+                if (!this.state.waveActive) {
+                    socket.send('input', { action: 'startWave' });
+                }
+            }
+            if (e.key === 'f' || e.key === 'F') {
+                socket.send('input', { action: 'toggleFastForward' });
             }
         });
     },
 
     handleUIClick(x, y) {
-        // Tower selection buttons (in sidebar)
-        const towerTypes = ['archer', 'cannon', 'mage', 'frost', 'poison', 'lightning', 'barracks', 'ultimate'];
-        const buttonHeight = 50;
-        const startY = 150;
+        // Tower selection buttons
+        const towers = ['archer', 'cannon', 'mage', 'frost', 'poison', 'lightning', 'barracks', 'ultimate'];
+        const startY = 185;
+        const buttonHeight = 42;
 
-        for (let i = 0; i < towerTypes.length; i++) {
-            const btnY = startY + i * (buttonHeight + 10);
-            if (y >= btnY && y < btnY + buttonHeight && x >= 10 && x < 220) {
-                this.selectedTowerType = towerTypes[i];
+        for (let i = 0; i < towers.length; i++) {
+            const btnY = startY + i * buttonHeight;
+            if (y >= btnY && y < btnY + buttonHeight - 2) {
+                this.selectedTowerType = towers[i];
                 this.selectedTower = null;
+                this.showUpgradePopout = false;
                 return;
             }
         }
 
-        // Start wave button
-        if (y >= 620 && y < 670 && x >= 10 && x < 220) {
-            if (this.state && !this.state.waveActive) {
-                socket.send('input', { action: 'start_wave' });
+        // Control buttons at bottom
+        const infoY = 555;
+        if (y >= infoY + 60 && y < infoY + 95) {
+            if (!this.state.waveActive) {
+                socket.send('input', { action: 'startWave' });
             }
         }
+        if (y >= infoY + 100 && y < infoY + 135) {
+            socket.send('input', { action: 'toggleFastForward' });
+        }
+    },
 
-        // Selected tower actions
-        if (this.selectedTower) {
-            // Upgrade button
-            if (y >= 520 && y < 555 && x >= 10 && x < 110) {
-                socket.send('input', { action: 'upgrade_tower', towerId: this.selectedTower.id });
-            }
-            // Sell button
-            if (y >= 520 && y < 555 && x >= 120 && x < 220) {
-                socket.send('input', { action: 'sell_tower', towerId: this.selectedTower.id });
-                this.selectedTower = null;
-            }
-            // Targeting buttons
-            const targets = ['first', 'last', 'strongest', 'weakest', 'closest'];
-            for (let i = 0; i < targets.length; i++) {
-                const btnY = 560 + Math.floor(i / 3) * 30;
-                const btnX = 10 + (i % 3) * 73;
-                if (y >= btnY && y < btnY + 25 && x >= btnX && x < btnX + 70) {
-                    socket.send('input', { action: 'set_targeting', towerId: this.selectedTower.id, priority: targets[i] });
+    handleUpgradePopoutClick(x, y) {
+        if (!this.selectedTower) return false;
+
+        const popoutY = 520;
+        const popoutHeight = 200;
+
+        // Check if click is in popout area
+        if (y < popoutY || y > popoutY + popoutHeight) {
+            return false;
+        }
+
+        const tower = this.selectedTower;
+        const tree = this.UPGRADE_TREES[tower.type];
+        const ups = tower.upgrades;
+
+        // Close button
+        if (x >= 900 && x <= 940 && y >= popoutY + 5 && y <= popoutY + 35) {
+            this.showUpgradePopout = false;
+            this.selectedTower = null;
+            return true;
+        }
+
+        // Sell button
+        if (x >= 800 && x <= 890 && y >= popoutY + 5 && y <= popoutY + 35) {
+            socket.send('input', { action: 'sellTower', towerId: tower.id });
+            this.showUpgradePopout = false;
+            this.selectedTower = null;
+            return true;
+        }
+
+        // Path A upgrades (left side)
+        const pathAX = 20;
+        const tierStartY = popoutY + 60;
+        const tierHeight = 32;
+
+        for (let t = 0; t < 4; t++) {
+            const tierY = tierStartY + t * tierHeight;
+            if (x >= pathAX && x <= pathAX + 200 && y >= tierY && y <= tierY + tierHeight - 2) {
+                const tier = (t < 2) ? t + 1 : 3;
+                const choice = (t >= 2) ? (t === 2 ? 'A' : 'B') : '';
+
+                if (this.canPurchaseUpgrade(tower, 'A', tier, choice)) {
+                    socket.send('input', {
+                        action: 'upgrade',
+                        towerId: tower.id,
+                        path: 'A',
+                        tier: tier,
+                        choice: choice
+                    });
+                    return true;
                 }
             }
         }
+
+        // Path B upgrades (right side)
+        const pathBX = 240;
+        for (let t = 0; t < 4; t++) {
+            const tierY = tierStartY + t * tierHeight;
+            if (x >= pathBX && x <= pathBX + 200 && y >= tierY && y <= tierY + tierHeight - 2) {
+                const tier = (t < 2) ? t + 1 : 3;
+                const choice = (t >= 2) ? (t === 2 ? 'A' : 'B') : '';
+
+                if (this.canPurchaseUpgrade(tower, 'B', tier, choice)) {
+                    socket.send('input', {
+                        action: 'upgrade',
+                        towerId: tower.id,
+                        path: 'B',
+                        tier: tier,
+                        choice: choice
+                    });
+                    return true;
+                }
+            }
+        }
+
+        return true; // Consume click in popout area
+    },
+
+    canPurchaseUpgrade(tower, pathStr, tier, choice) {
+        const ups = tower.upgrades;
+        const currentTier = (pathStr === 'A') ? ups.pathA : ups.pathB;
+
+        if (tier !== currentTier + 1) return false;
+
+        const isLocked = (pathStr === 'A') ? ups.pathALocked : ups.pathBLocked;
+        if (tier > 2 && isLocked) return false;
+
+        if (tier === 3) {
+            const existingChoice = (pathStr === 'A') ? ups.pathAChoice : ups.pathBChoice;
+            if (existingChoice !== '') return false;
+        }
+
+        const tree = this.UPGRADE_TREES[tower.type];
+        const path = (pathStr === 'A') ? tree.pathA : tree.pathB;
+        const tierIdx = (tier === 3) ? (choice === 'B' ? 3 : 2) : (tier - 1);
+        const cost = path.tiers[tierIdx].cost;
+
+        return this.state.gold >= cost;
     },
 
     canPlaceTower(x, y) {
-        if (!this.state || !this.state.map) return false;
+        if (!this.state || !this.config) return false;
         if (x < 0 || x >= this.config.gridWidth || y < 0 || y >= this.config.gridHeight) return false;
-
-        // Check map cell (0 = EMPTY, 1 = PATH, 2 = BLOCKED)
         if (this.state.map[y][x] !== 0) return false;
-
-        // Check existing towers
         for (const tower of this.state.towers) {
             if (tower.x === x && tower.y === y) return false;
         }
-
-        // Check cost
-        const cost = this.TOWER_COSTS[this.selectedTowerType];
-        if (this.state.gold < cost) return false;
-
-        // Check ultimate unlock
-        if (this.selectedTowerType === 'ultimate' && this.state.wave < 40) return false;
-
+        if (this.state.gold < this.TOWER_COSTS[this.selectedTowerType]) return false;
         return true;
-    },
-
-    startRenderLoop() {
-        const render = () => {
-            this.render();
-            requestAnimationFrame(render);
-        };
-        requestAnimationFrame(render);
     },
 
     updateState(state) {
@@ -259,36 +502,46 @@ const TowerDefenseRenderer = {
         // Update selected tower reference
         if (this.selectedTower && state.towers) {
             const updated = state.towers.find(t => t.id === this.selectedTower.id);
-            this.selectedTower = updated || null;
+            if (updated) {
+                this.selectedTower = updated;
+            } else {
+                this.selectedTower = null;
+                this.showUpgradePopout = false;
+            }
         }
     },
 
+    startRenderLoop() {
+        const render = () => {
+            this.render();
+            requestAnimationFrame(render);
+        };
+        render();
+    },
+
     render() {
-        if (!this.ctx) return;
+        if (!this.state || !this.config) return;
 
         const ctx = this.ctx;
-        ctx.fillStyle = '#0d1117';
-        ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-
-        if (!this.state || !this.config) {
-            ctx.fillStyle = '#8b949e';
-            ctx.font = '24px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText('Waiting for game to start...', 480, 360);
-            return;
-        }
+        ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
         this.renderMap();
         this.renderPath();
         this.renderTowers();
         this.renderEnemies();
         this.renderProjectiles();
+        this.renderSoldiers();
         this.renderHoverPreview();
         this.renderUI();
 
-        // Game over / Victory overlay
-        if (this.state.gameOver || this.state.victory) {
-            this.renderEndScreen();
+        if (this.showUpgradePopout && this.selectedTower) {
+            this.renderUpgradePopout();
+        }
+
+        if (this.state.gameOver) {
+            this.renderGameOver();
+        } else if (this.state.victory) {
+            this.renderVictory();
         }
     },
 
@@ -303,343 +556,80 @@ const TowerDefenseRenderer = {
                 const py = y * cellSize;
 
                 if (cell === 0) {
-                    // Buildable - grass with texture
-                    this.drawGrassTile(ctx, px, py, cellSize, x, y);
+                    // Grass pattern
+                    const brightness = ((x + y) % 2 === 0) ? '#2d5a27' : '#2a5424';
+                    ctx.fillStyle = brightness;
+                    ctx.fillRect(px, py, cellSize, cellSize);
+
+                    // Subtle grass texture
+                    ctx.fillStyle = 'rgba(255,255,255,0.03)';
+                    for (let i = 0; i < 3; i++) {
+                        const gx = px + Math.random() * cellSize;
+                        const gy = py + Math.random() * cellSize;
+                        ctx.fillRect(gx, gy, 2, 4);
+                    }
                 } else if (cell === 1) {
-                    // Path - cobblestone
-                    this.drawPathTile(ctx, px, py, cellSize, x, y);
+                    // Path
+                    ctx.fillStyle = '#8b7355';
+                    ctx.fillRect(px, py, cellSize, cellSize);
+                    ctx.fillStyle = '#7a6548';
+                    ctx.fillRect(px + 2, py + 2, cellSize - 4, cellSize - 4);
                 } else {
-                    // Blocked - decorative rocks/trees
-                    this.drawBlockedTile(ctx, px, py, cellSize, x, y);
+                    // Blocked (decorative)
+                    ctx.fillStyle = '#1a3d18';
+                    ctx.fillRect(px, py, cellSize, cellSize);
+                    ctx.fillStyle = '#2d5a27';
+                    ctx.beginPath();
+                    ctx.arc(px + cellSize/2, py + cellSize/2, 15, 0, Math.PI * 2);
+                    ctx.fill();
                 }
             }
         }
-
-        // Subtle grid overlay
-        ctx.strokeStyle = 'rgba(33, 38, 45, 0.5)';
-        ctx.lineWidth = 1;
-        for (let y = 0; y <= this.config.gridHeight; y++) {
-            ctx.beginPath();
-            ctx.moveTo(0, y * cellSize);
-            ctx.lineTo(this.config.gridWidth * cellSize, y * cellSize);
-            ctx.stroke();
-        }
-        for (let x = 0; x <= this.config.gridWidth; x++) {
-            ctx.beginPath();
-            ctx.moveTo(x * cellSize, 0);
-            ctx.lineTo(x * cellSize, this.config.gridHeight * cellSize);
-            ctx.stroke();
-        }
-    },
-
-    // Draw textured grass tile
-    drawGrassTile(ctx, px, py, size, gridX, gridY) {
-        // Base grass color with slight variation
-        const variation = ((gridX * 7 + gridY * 13) % 3) * 0.02;
-        ctx.fillStyle = `rgb(${30 + variation * 100}, ${58 + variation * 50}, ${47 + variation * 30})`;
-        ctx.fillRect(px, py, size, size);
-
-        // Grass texture (small dots/blades)
-        ctx.fillStyle = 'rgba(40, 80, 60, 0.4)';
-        const seed = gridX * 100 + gridY;
-        for (let i = 0; i < 8; i++) {
-            const sx = px + ((seed * (i + 1) * 17) % size);
-            const sy = py + ((seed * (i + 1) * 23) % size);
-            ctx.fillRect(sx, sy, 2, 4);
-        }
-
-        // Occasional flower or small detail
-        if ((gridX + gridY) % 7 === 0) {
-            ctx.fillStyle = '#ffeb3b';
-            ctx.beginPath();
-            ctx.arc(px + size * 0.3, py + size * 0.7, 2, 0, Math.PI * 2);
-            ctx.fill();
-        } else if ((gridX * 3 + gridY * 5) % 11 === 0) {
-            ctx.fillStyle = '#81c784';
-            ctx.beginPath();
-            ctx.arc(px + size * 0.6, py + size * 0.4, 3, 0, Math.PI * 2);
-            ctx.fill();
-        }
-    },
-
-    // Draw cobblestone path tile
-    drawPathTile(ctx, px, py, size, gridX, gridY) {
-        // Base path color
-        ctx.fillStyle = '#5d5d7a';
-        ctx.fillRect(px, py, size, size);
-
-        // Cobblestone pattern
-        ctx.fillStyle = '#4a4a6a';
-        const stonePattern = [
-            [0.1, 0.1, 0.35, 0.4],
-            [0.5, 0.05, 0.45, 0.35],
-            [0.05, 0.55, 0.4, 0.4],
-            [0.5, 0.45, 0.45, 0.5]
-        ];
-
-        for (const [sx, sy, sw, sh] of stonePattern) {
-            ctx.fillStyle = ((gridX + gridY) % 2 === 0) ? '#4a4a6a' : '#525278';
-            ctx.beginPath();
-            ctx.roundRect(px + sx * size, py + sy * size, sw * size * 0.9, sh * size * 0.9, 3);
-            ctx.fill();
-        }
-
-        // Stone highlights
-        ctx.fillStyle = 'rgba(100, 100, 140, 0.3)';
-        ctx.fillRect(px + 4, py + 4, size * 0.3, 2);
-        ctx.fillRect(px + size * 0.5, py + size * 0.5, size * 0.25, 2);
-
-        // Worn path edges
-        ctx.fillStyle = 'rgba(80, 80, 100, 0.4)';
-        ctx.fillRect(px, py, size, 2);
-        ctx.fillRect(px, py + size - 2, size, 2);
-    },
-
-    // Draw blocked/decorative tile
-    drawBlockedTile(ctx, px, py, size, gridX, gridY) {
-        // Dark base
-        ctx.fillStyle = '#1a1a2a';
-        ctx.fillRect(px, py, size, size);
-
-        const decorType = (gridX * 3 + gridY * 7) % 4;
-
-        if (decorType === 0 || decorType === 1) {
-            // Draw rock formation
-            this.drawRockDecoration(ctx, px, py, size);
-        } else {
-            // Draw tree
-            this.drawTreeDecoration(ctx, px, py, size);
-        }
-    },
-
-    // Draw rock formation
-    drawRockDecoration(ctx, px, py, size) {
-        const cx = px + size / 2;
-        const cy = py + size / 2;
-
-        // Large rock
-        ctx.fillStyle = '#455a64';
-        ctx.beginPath();
-        ctx.ellipse(cx, cy + 4, size * 0.4, size * 0.3, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Rock top
-        ctx.fillStyle = '#546e7a';
-        ctx.beginPath();
-        ctx.ellipse(cx, cy, size * 0.35, size * 0.25, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Highlight
-        ctx.fillStyle = '#607d8b';
-        ctx.beginPath();
-        ctx.ellipse(cx - 4, cy - 4, size * 0.15, size * 0.1, -0.5, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Small rocks
-        ctx.fillStyle = '#37474f';
-        ctx.beginPath();
-        ctx.arc(cx - size * 0.3, cy + size * 0.2, 6, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(cx + size * 0.25, cy + size * 0.25, 5, 0, Math.PI * 2);
-        ctx.fill();
-    },
-
-    // Draw tree decoration
-    drawTreeDecoration(ctx, px, py, size) {
-        const cx = px + size / 2;
-        const cy = py + size / 2;
-
-        // Tree shadow
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-        ctx.beginPath();
-        ctx.ellipse(cx + 4, cy + size * 0.35, size * 0.35, size * 0.15, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Trunk
-        ctx.fillStyle = '#5d4037';
-        ctx.fillRect(cx - 4, cy, 8, size * 0.35);
-
-        // Foliage layers
-        ctx.fillStyle = '#2e7d32';
-        ctx.beginPath();
-        ctx.arc(cx, cy - 2, size * 0.35, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = '#388e3c';
-        ctx.beginPath();
-        ctx.arc(cx - 4, cy + 4, size * 0.25, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(cx + 6, cy + 2, size * 0.22, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Highlights
-        ctx.fillStyle = '#4caf50';
-        ctx.beginPath();
-        ctx.arc(cx - 2, cy - 6, size * 0.12, 0, Math.PI * 2);
-        ctx.fill();
     },
 
     renderPath() {
         const ctx = this.ctx;
-        const path = this.state.path;
         const cellSize = this.config.cellSize;
 
-        if (!path || path.length < 2) return;
-
-        // Draw spawn portal
-        const spawn = path[0];
-        this.drawSpawnPortal(ctx, spawn.x * cellSize + cellSize / 2, spawn.y * cellSize + cellSize / 2);
-
-        // Draw castle at end
-        const end = path[path.length - 1];
-        this.drawCastle(ctx, end.x * cellSize + cellSize / 2, end.y * cellSize + cellSize / 2);
-    },
-
-    // Draw spawn portal
-    drawSpawnPortal(ctx, x, y) {
-        const time = Date.now() / 1000;
-        const pulse = Math.sin(time * 3) * 0.2 + 0.8;
-
-        // Outer glow
-        ctx.fillStyle = `rgba(76, 175, 80, ${0.2 * pulse})`;
-        ctx.beginPath();
-        ctx.arc(x, y, 28, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Portal ring
-        ctx.strokeStyle = '#4CAF50';
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.arc(x, y, 20, 0, Math.PI * 2);
-        ctx.stroke();
-
-        // Inner portal
-        ctx.fillStyle = '#1b5e20';
-        ctx.beginPath();
-        ctx.arc(x, y, 16, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Swirl effect
-        ctx.strokeStyle = '#81c784';
+        // Draw path direction arrows
+        ctx.strokeStyle = 'rgba(255,255,255,0.2)';
         ctx.lineWidth = 2;
-        for (let i = 0; i < 3; i++) {
-            const angle = time * 2 + i * Math.PI * 2 / 3;
+
+        for (let i = 0; i < this.state.path.length - 1; i++) {
+            const p1 = this.state.path[i];
+            const p2 = this.state.path[i + 1];
+            const x1 = p1.x * cellSize + cellSize / 2;
+            const y1 = p1.y * cellSize + cellSize / 2;
+            const x2 = p2.x * cellSize + cellSize / 2;
+            const y2 = p2.y * cellSize + cellSize / 2;
+
+            const midX = (x1 + x2) / 2;
+            const midY = (y1 + y2) / 2;
+            const angle = Math.atan2(y2 - y1, x2 - x1);
+
+            ctx.save();
+            ctx.translate(midX, midY);
+            ctx.rotate(angle);
             ctx.beginPath();
-            ctx.arc(x, y, 10, angle, angle + Math.PI / 2);
+            ctx.moveTo(-8, -5);
+            ctx.lineTo(0, 0);
+            ctx.lineTo(-8, 5);
             ctx.stroke();
+            ctx.restore();
         }
 
-        // Center glow
-        ctx.fillStyle = '#a5d6a7';
-        ctx.beginPath();
-        ctx.arc(x, y, 4, 0, Math.PI * 2);
-        ctx.fill();
+        // Start indicator
+        const start = this.state.path[0];
+        ctx.fillStyle = '#4CAF50';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('START', start.x * cellSize + cellSize/2, start.y * cellSize - 5);
 
-        // Arrow indicating direction
-        ctx.fillStyle = '#fff';
-        ctx.beginPath();
-        ctx.moveTo(x + 24, y);
-        ctx.lineTo(x + 16, y - 6);
-        ctx.lineTo(x + 16, y + 6);
-        ctx.closePath();
-        ctx.fill();
-    },
-
-    // Draw castle
-    drawCastle(ctx, x, y) {
-        const time = Date.now() / 1000;
-
-        // Castle shadow
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-        ctx.beginPath();
-        ctx.ellipse(x + 4, y + 20, 24, 8, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Main castle body
-        ctx.fillStyle = '#5d4037';
-        ctx.fillRect(x - 18, y - 10, 36, 30);
-
-        // Castle front face
-        ctx.fillStyle = '#6d4c41';
-        ctx.fillRect(x - 16, y - 8, 32, 26);
-
-        // Door
-        ctx.fillStyle = '#3e2723';
-        ctx.beginPath();
-        ctx.moveTo(x - 6, y + 18);
-        ctx.lineTo(x - 6, y + 4);
-        ctx.arc(x, y + 4, 6, Math.PI, 0);
-        ctx.lineTo(x + 6, y + 18);
-        ctx.fill();
-
-        // Door handle
+        // End indicator (castle)
+        const end = this.state.path[this.state.path.length - 1];
         ctx.fillStyle = '#ffd700';
-        ctx.beginPath();
-        ctx.arc(x + 3, y + 10, 2, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Windows
-        ctx.fillStyle = '#ffeb3b';
-        ctx.globalAlpha = 0.6 + Math.sin(time * 2) * 0.2;
-        ctx.fillRect(x - 12, y - 2, 6, 8);
-        ctx.fillRect(x + 6, y - 2, 6, 8);
-        ctx.globalAlpha = 1;
-
-        // Tower left
-        ctx.fillStyle = '#5d4037';
-        ctx.fillRect(x - 22, y - 20, 12, 40);
-        ctx.fillStyle = '#6d4c41';
-        ctx.fillRect(x - 20, y - 18, 8, 36);
-
-        // Tower right
-        ctx.fillRect(x + 10, y - 20, 12, 40);
-        ctx.fillStyle = '#6d4c41';
-        ctx.fillRect(x + 12, y - 18, 8, 36);
-
-        // Battlements left
-        ctx.fillStyle = '#4e342e';
-        ctx.fillRect(x - 24, y - 24, 4, 6);
-        ctx.fillRect(x - 18, y - 24, 4, 6);
-        ctx.fillRect(x - 12, y - 24, 4, 6);
-
-        // Battlements right
-        ctx.fillRect(x + 8, y - 24, 4, 6);
-        ctx.fillRect(x + 14, y - 24, 4, 6);
-        ctx.fillRect(x + 20, y - 24, 4, 6);
-
-        // Battlements center
-        ctx.fillRect(x - 6, y - 14, 4, 4);
-        ctx.fillRect(x + 2, y - 14, 4, 4);
-
-        // Flags
-        ctx.fillStyle = '#5d4037';
-        ctx.fillRect(x - 18, y - 34, 2, 14);
-        ctx.fillRect(x + 16, y - 34, 2, 14);
-
-        // Flag cloth (waving)
-        const wave = Math.sin(time * 4) * 2;
-        ctx.fillStyle = '#f44336';
-        ctx.beginPath();
-        ctx.moveTo(x - 16, y - 34);
-        ctx.quadraticCurveTo(x - 8, y - 32 + wave, x - 16, y - 26);
-        ctx.lineTo(x - 16, y - 34);
-        ctx.fill();
-
-        ctx.beginPath();
-        ctx.moveTo(x + 18, y - 34);
-        ctx.quadraticCurveTo(x + 26, y - 32 + wave, x + 18, y - 26);
-        ctx.lineTo(x + 18, y - 34);
-        ctx.fill();
-
-        // Lives indicator (hearts around castle)
-        if (this.state && this.state.lives !== undefined) {
-            ctx.fillStyle = '#f44336';
-            ctx.font = 'bold 12px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText(`♥ ${this.state.lives}`, x, y + 32);
-        }
+        ctx.font = '24px sans-serif';
+        ctx.fillText('🏰', end.x * cellSize + cellSize/2, end.y * cellSize + cellSize/2 + 8);
     },
 
     renderTowers() {
@@ -649,21 +639,22 @@ const TowerDefenseRenderer = {
         for (const tower of this.state.towers) {
             const x = tower.x * cellSize + cellSize / 2;
             const y = tower.y * cellSize + cellSize / 2;
-            const isSelected = this.selectedTower && this.selectedTower.id === tower.id;
-            const showRange = this.showRangeFor === tower.id || isSelected;
 
-            // Range indicator
-            if (showRange) {
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
-                ctx.lineWidth = 2;
+            const isSelected = this.selectedTower && this.selectedTower.id === tower.id;
+            const isHovered = this.showRangeFor === tower.id;
+
+            // Range circle
+            if (isSelected || isHovered) {
                 ctx.beginPath();
                 ctx.arc(x, y, tower.range, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(255,255,255,0.1)';
                 ctx.fill();
+                ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+                ctx.lineWidth = 1;
                 ctx.stroke();
             }
 
-            // Draw tower based on type
+            // Draw tower
             ctx.save();
             ctx.translate(x, y);
 
@@ -681,13 +672,14 @@ const TowerDefenseRenderer = {
 
             ctx.restore();
 
-            // Level stars
-            if (tower.level > 0) {
-                ctx.fillStyle = '#ffd700';
-                ctx.font = 'bold 10px sans-serif';
-                ctx.textAlign = 'center';
-                for (let i = 0; i < tower.level; i++) {
-                    ctx.fillText('★', x - 8 + i * 8, y - 20);
+            // Upgrade notation
+            if (tower.upgrades) {
+                const notation = tower.upgrades.notation;
+                if (notation !== '0-0') {
+                    ctx.fillStyle = '#ffd700';
+                    ctx.font = 'bold 9px sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(notation, x, y - 22);
                 }
             }
 
@@ -704,35 +696,37 @@ const TowerDefenseRenderer = {
         }
     },
 
-    // Archer Tower - Wooden platform with archer figure
     drawArcherTower(ctx, tower) {
-        const level = tower.level;
+        const ups = tower.upgrades || { pathA: 0, pathB: 0 };
 
-        // Wooden base platform
+        // Wooden base
         ctx.fillStyle = '#5d4037';
         ctx.fillRect(-16, -8, 32, 20);
         ctx.fillStyle = '#4e342e';
         ctx.fillRect(-14, -6, 28, 16);
 
-        // Wooden supports
+        // Supports
         ctx.fillStyle = '#6d4c41';
         ctx.fillRect(-18, 4, 6, 12);
         ctx.fillRect(12, 4, 6, 12);
 
-        // Archer body (green tunic)
-        ctx.fillStyle = level >= 2 ? '#2e7d32' : '#4CAF50';
+        // Archer body
+        const hasFireArrows = ups.pathA === 3 && ups.pathAChoice === 'A';
+        const hasIceArrows = ups.pathA === 3 && ups.pathAChoice === 'B';
+
+        ctx.fillStyle = hasFireArrows ? '#ff5722' : (hasIceArrows ? '#00bcd4' : '#4CAF50');
         ctx.beginPath();
         ctx.ellipse(0, -4, 6, 8, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        // Archer head
+        // Head
         ctx.fillStyle = '#ffcc80';
         ctx.beginPath();
         ctx.arc(0, -14, 5, 0, Math.PI * 2);
         ctx.fill();
 
-        // Hood/hat
-        ctx.fillStyle = level >= 2 ? '#1b5e20' : '#388e3c';
+        // Hood
+        ctx.fillStyle = hasFireArrows ? '#e64a19' : (hasIceArrows ? '#0097a7' : '#388e3c');
         ctx.beginPath();
         ctx.arc(0, -16, 4, Math.PI, 0);
         ctx.fill();
@@ -741,616 +735,438 @@ const TowerDefenseRenderer = {
         ctx.strokeStyle = '#8d6e63';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(8, -8, 10, -Math.PI * 0.6, Math.PI * 0.6);
+        ctx.arc(8, -4, 10, -Math.PI/2, Math.PI/2);
         ctx.stroke();
-
-        // Bowstring
-        ctx.strokeStyle = '#e0e0e0';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(8, -16);
-        ctx.lineTo(8, 0);
-        ctx.stroke();
-
-        // Level 3: Arrow quiver
-        if (level >= 3) {
-            ctx.fillStyle = '#5d4037';
-            ctx.fillRect(-10, -10, 4, 12);
-            ctx.fillStyle = '#8d6e63';
-            ctx.fillRect(-9, -14, 2, 6);
-            ctx.fillRect(-9, -14, 2, 6);
-        }
     },
 
-    // Cannon Tower - Stone platform with rotating barrel
     drawCannonTower(ctx, tower) {
-        const level = tower.level;
-        const time = Date.now() / 1000;
+        const ups = tower.upgrades || { pathA: 0, pathB: 0 };
 
-        // Stone base (circular platform)
-        ctx.fillStyle = '#546e7a';
-        ctx.beginPath();
-        ctx.arc(0, 4, 18, 0, Math.PI * 2);
-        ctx.fill();
+        // Platform
+        ctx.fillStyle = '#424242';
+        ctx.fillRect(-18, 2, 36, 14);
+        ctx.fillStyle = '#616161';
+        ctx.fillRect(-16, 4, 32, 10);
 
-        ctx.fillStyle = '#455a64';
-        ctx.beginPath();
-        ctx.arc(0, 2, 16, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Brick pattern
-        ctx.strokeStyle = '#37474f';
-        ctx.lineWidth = 1;
-        for (let i = -12; i <= 12; i += 8) {
-            ctx.beginPath();
-            ctx.moveTo(i, -8);
-            ctx.lineTo(i, 10);
-            ctx.stroke();
-        }
-
-        // Cannon body
-        const cannonColor = level >= 2 ? '#4a4a4a' : '#616161';
-        ctx.fillStyle = cannonColor;
-        ctx.fillRect(-6, -16, 12, 20);
-
-        // Cannon barrel
-        ctx.fillStyle = level >= 3 ? '#b71c1c' : '#424242';
-        ctx.beginPath();
-        ctx.moveTo(-4, -16);
-        ctx.lineTo(-6, -24);
-        ctx.lineTo(6, -24);
-        ctx.lineTo(4, -16);
-        ctx.fill();
-
-        // Cannon wheel (left)
+        // Wheels
         ctx.fillStyle = '#5d4037';
         ctx.beginPath();
-        ctx.arc(-10, 6, 6, 0, Math.PI * 2);
+        ctx.arc(-12, 14, 6, 0, Math.PI * 2);
+        ctx.arc(12, 14, 6, 0, Math.PI * 2);
         ctx.fill();
-        ctx.strokeStyle = '#3e2723';
-        ctx.lineWidth = 2;
-        ctx.stroke();
 
-        // Cannon wheel (right)
+        // Cannon barrel
+        ctx.fillStyle = ups.pathA >= 2 ? '#212121' : '#37474f';
+        ctx.fillRect(-6, -16, 12, 20);
+
+        // Barrel opening
+        ctx.fillStyle = '#000';
         ctx.beginPath();
-        ctx.arc(10, 6, 6, 0, Math.PI * 2);
+        ctx.ellipse(0, -16, 5, 3, 0, 0, Math.PI * 2);
         ctx.fill();
-        ctx.stroke();
 
-        // Cannonball stack (level 3)
-        if (level >= 3) {
-            ctx.fillStyle = '#212121';
+        // Flame decoration for napalm
+        if (ups.pathA === 3 && ups.pathAChoice === 'A') {
+            ctx.fillStyle = '#ff5722';
             ctx.beginPath();
-            ctx.arc(-14, -4, 3, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.beginPath();
-            ctx.arc(-10, -4, 3, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.beginPath();
-            ctx.arc(-12, -8, 3, 0, Math.PI * 2);
+            ctx.arc(0, -20, 4, 0, Math.PI * 2);
             ctx.fill();
         }
     },
 
-    // Mage Tower - Crystal spire with floating orb
     drawMageTower(ctx, tower) {
-        const level = tower.level;
-        const time = Date.now() / 1000;
-        const pulse = Math.sin(time * 3) * 0.2 + 0.8;
+        const ups = tower.upgrades || { pathA: 0, pathB: 0 };
 
-        // Base platform (mystical stone)
+        // Tower base
         ctx.fillStyle = '#4a148c';
         ctx.beginPath();
-        ctx.moveTo(-16, 10);
-        ctx.lineTo(-12, -2);
-        ctx.lineTo(12, -2);
-        ctx.lineTo(16, 10);
+        ctx.moveTo(-14, 16);
+        ctx.lineTo(-10, -8);
+        ctx.lineTo(10, -8);
+        ctx.lineTo(14, 16);
         ctx.closePath();
         ctx.fill();
 
-        // Spire body
-        const gradient = ctx.createLinearGradient(0, -20, 0, 10);
-        gradient.addColorStop(0, '#7b1fa2');
-        gradient.addColorStop(1, '#4a148c');
+        // Magic orb
+        const isVoid = ups.pathA === 3 && ups.pathAChoice === 'B';
+        const gradient = ctx.createRadialGradient(0, -4, 0, 0, -4, 10);
+        if (isVoid) {
+            gradient.addColorStop(0, '#000');
+            gradient.addColorStop(0.5, '#4a148c');
+            gradient.addColorStop(1, '#000');
+        } else {
+            gradient.addColorStop(0, '#e1bee7');
+            gradient.addColorStop(0.5, '#9c27b0');
+            gradient.addColorStop(1, '#4a148c');
+        }
         ctx.fillStyle = gradient;
-
         ctx.beginPath();
-        ctx.moveTo(-8, 8);
-        ctx.lineTo(-4, -18);
-        ctx.lineTo(4, -18);
-        ctx.lineTo(8, 8);
-        ctx.closePath();
+        ctx.arc(0, -4, 10, 0, Math.PI * 2);
         ctx.fill();
 
-        // Spire tip
-        ctx.fillStyle = '#9c27b0';
-        ctx.beginPath();
-        ctx.moveTo(-4, -18);
-        ctx.lineTo(0, -26);
-        ctx.lineTo(4, -18);
-        ctx.closePath();
-        ctx.fill();
-
-        // Floating orb
-        const orbY = -10 + Math.sin(time * 2) * 3;
-        const orbSize = 6 * pulse;
-
-        // Orb glow
-        ctx.fillStyle = `rgba(186, 104, 200, ${0.3 * pulse})`;
-        ctx.beginPath();
-        ctx.arc(0, orbY, orbSize + 4, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Orb
-        ctx.fillStyle = level >= 2 ? '#e040fb' : '#ce93d8';
-        ctx.beginPath();
-        ctx.arc(0, orbY, orbSize, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Orb highlight
+        // Sparkles
         ctx.fillStyle = '#fff';
+        const time = Date.now() / 200;
+        for (let i = 0; i < 3; i++) {
+            const angle = time + i * 2.1;
+            const px = Math.cos(angle) * 6;
+            const py = -4 + Math.sin(angle) * 6;
+            ctx.beginPath();
+            ctx.arc(px, py, 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    },
+
+    drawFrostTower(ctx, tower) {
+        const ups = tower.upgrades || { pathA: 0, pathB: 0 };
+
+        // Ice crystal base
+        ctx.fillStyle = '#b3e5fc';
         ctx.beginPath();
-        ctx.arc(-2, orbY - 2, 2, 0, Math.PI * 2);
+        ctx.moveTo(0, -20);
+        ctx.lineTo(-12, 0);
+        ctx.lineTo(-8, 16);
+        ctx.lineTo(8, 16);
+        ctx.lineTo(12, 0);
+        ctx.closePath();
         ctx.fill();
 
-        // Magic runes (level 3)
-        if (level >= 3) {
-            ctx.strokeStyle = '#e1bee7';
-            ctx.lineWidth = 1;
+        // Inner crystal
+        ctx.fillStyle = '#4fc3f7';
+        ctx.beginPath();
+        ctx.moveTo(0, -14);
+        ctx.lineTo(-6, 0);
+        ctx.lineTo(-4, 10);
+        ctx.lineTo(4, 10);
+        ctx.lineTo(6, 0);
+        ctx.closePath();
+        ctx.fill();
+
+        // Frost aura for blizzard
+        if (ups.pathB === 3 && ups.pathBChoice === 'B') {
+            ctx.strokeStyle = 'rgba(79, 195, 247, 0.5)';
+            ctx.lineWidth = 2;
+            const time = Date.now() / 500;
             ctx.beginPath();
-            ctx.arc(0, 6, 10, 0, Math.PI * 2);
+            ctx.arc(0, 0, 18 + Math.sin(time) * 3, 0, Math.PI * 2);
             ctx.stroke();
         }
+
+        // Snowflakes
+        ctx.fillStyle = '#fff';
+        ctx.font = '10px sans-serif';
+        ctx.fillText('❄', -8, -8);
+        ctx.fillText('❄', 4, 4);
     },
 
-    // Frost Tower - Ice crystal formation
-    drawFrostTower(ctx, tower) {
-        const level = tower.level;
-        const time = Date.now() / 1000;
-
-        // Ice base
-        ctx.fillStyle = '#4dd0e1';
-        ctx.globalAlpha = 0.8;
-        ctx.beginPath();
-        ctx.moveTo(-14, 12);
-        ctx.lineTo(-10, 0);
-        ctx.lineTo(10, 0);
-        ctx.lineTo(14, 12);
-        ctx.closePath();
-        ctx.fill();
-        ctx.globalAlpha = 1;
-
-        // Main ice crystal
-        const crystalGradient = ctx.createLinearGradient(0, -24, 0, 8);
-        crystalGradient.addColorStop(0, '#e0f7fa');
-        crystalGradient.addColorStop(0.5, '#80deea');
-        crystalGradient.addColorStop(1, '#00bcd4');
-        ctx.fillStyle = crystalGradient;
-
-        ctx.beginPath();
-        ctx.moveTo(0, -24);
-        ctx.lineTo(-8, 0);
-        ctx.lineTo(0, 8);
-        ctx.lineTo(8, 0);
-        ctx.closePath();
-        ctx.fill();
-
-        // Crystal shine
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-        ctx.beginPath();
-        ctx.moveTo(-2, -20);
-        ctx.lineTo(-4, -8);
-        ctx.lineTo(-1, -8);
-        ctx.lineTo(0, -18);
-        ctx.closePath();
-        ctx.fill();
-
-        // Side crystals
-        ctx.fillStyle = '#4dd0e1';
-        // Left crystal
-        ctx.beginPath();
-        ctx.moveTo(-12, 4);
-        ctx.lineTo(-16, -8);
-        ctx.lineTo(-8, -4);
-        ctx.closePath();
-        ctx.fill();
-
-        // Right crystal
-        ctx.beginPath();
-        ctx.moveTo(12, 4);
-        ctx.lineTo(16, -8);
-        ctx.lineTo(8, -4);
-        ctx.closePath();
-        ctx.fill();
-
-        // Cold aura particles (level 2+)
-        if (level >= 2) {
-            ctx.fillStyle = 'rgba(224, 247, 250, 0.6)';
-            for (let i = 0; i < 5; i++) {
-                const angle = (time + i * 1.2) % (Math.PI * 2);
-                const dist = 16 + Math.sin(time * 2 + i) * 4;
-                const px = Math.cos(angle) * dist;
-                const py = Math.sin(angle) * dist - 4;
-                ctx.beginPath();
-                ctx.arc(px, py, 2, 0, Math.PI * 2);
-                ctx.fill();
-            }
-        }
-    },
-
-    // Poison Tower - Bubbling cauldron
     drawPoisonTower(ctx, tower) {
-        const level = tower.level;
-        const time = Date.now() / 1000;
+        const ups = tower.upgrades || { pathA: 0, pathB: 0 };
 
-        // Cauldron base
-        ctx.fillStyle = '#37474f';
+        // Vat
+        ctx.fillStyle = '#5d4037';
         ctx.beginPath();
-        ctx.ellipse(0, 8, 16, 8, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Cauldron body
-        ctx.fillStyle = '#455a64';
-        ctx.beginPath();
-        ctx.ellipse(0, 0, 14, 12, 0, 0, Math.PI);
-        ctx.fill();
-
-        // Cauldron rim
-        ctx.fillStyle = '#546e7a';
-        ctx.beginPath();
-        ctx.ellipse(0, -2, 14, 4, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, 8, 14, 8, 0, 0, Math.PI * 2);
         ctx.fill();
 
         // Poison liquid
-        ctx.fillStyle = level >= 2 ? '#76ff03' : '#8bc34a';
+        ctx.fillStyle = '#8bc34a';
         ctx.beginPath();
-        ctx.ellipse(0, -2, 12, 3, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, 4, 12, 6, 0, 0, Math.PI * 2);
         ctx.fill();
 
         // Bubbles
         ctx.fillStyle = '#c5e1a5';
-        const bubbleCount = level >= 3 ? 6 : 4;
-        for (let i = 0; i < bubbleCount; i++) {
-            const bx = Math.sin(time * 2 + i * 1.5) * 8;
-            const by = -4 - ((time * 20 + i * 15) % 12);
-            const bs = 2 + Math.sin(time + i) * 1;
-            ctx.globalAlpha = 1 - (by + 16) / 12 * 0.7;
+        const time = Date.now() / 300;
+        for (let i = 0; i < 3; i++) {
+            const bx = -6 + i * 6 + Math.sin(time + i) * 2;
+            const by = 2 - Math.abs(Math.sin(time + i * 0.7)) * 4;
             ctx.beginPath();
-            ctx.arc(bx, by, bs, 0, Math.PI * 2);
-            ctx.fill();
-        }
-        ctx.globalAlpha = 1;
-
-        // Poison drips (level 3)
-        if (level >= 3) {
-            ctx.fillStyle = '#8bc34a';
-            const dripY = (time * 30) % 20;
-            ctx.beginPath();
-            ctx.ellipse(-10, 8 + dripY, 2, 3, 0, 0, Math.PI * 2);
+            ctx.arc(bx, by, 3, 0, Math.PI * 2);
             ctx.fill();
         }
 
-        // Skull decoration
-        ctx.fillStyle = '#e0e0e0';
-        ctx.beginPath();
-        ctx.arc(0, 4, 5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#37474f';
-        ctx.beginPath();
-        ctx.arc(-2, 3, 1.5, 0, Math.PI * 2);
-        ctx.arc(2, 3, 1.5, 0, Math.PI * 2);
-        ctx.fill();
+        // Skull for potent poison
+        if (ups.pathA >= 2) {
+            ctx.fillStyle = '#fff';
+            ctx.font = '12px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('☠', 0, -8);
+        }
     },
 
-    // Lightning Tower - Tesla coil with electric arcs
     drawLightningTower(ctx, tower) {
-        const level = tower.level;
-        const time = Date.now() / 1000;
+        const ups = tower.upgrades || { pathA: 0, pathB: 0 };
 
-        // Metal base
-        ctx.fillStyle = '#546e7a';
-        ctx.fillRect(-12, 4, 24, 12);
+        // Coil base
+        ctx.fillStyle = '#ffd54f';
+        ctx.fillRect(-8, 4, 16, 12);
 
-        // Base detail
-        ctx.fillStyle = '#78909c';
-        ctx.fillRect(-10, 6, 20, 4);
-
-        // Central coil post
-        ctx.fillStyle = '#455a64';
-        ctx.fillRect(-4, -20, 8, 28);
-
-        // Coil rings
-        ctx.strokeStyle = '#ff9800';
-        ctx.lineWidth = 3;
-        for (let i = 0; i < 4; i++) {
-            ctx.beginPath();
-            ctx.ellipse(0, -4 - i * 5, 8, 3, 0, 0, Math.PI * 2);
-            ctx.stroke();
-        }
-
-        // Top sphere
-        ctx.fillStyle = level >= 2 ? '#ffc107' : '#ffeb3b';
+        // Tesla coil
+        ctx.fillStyle = '#ffeb3b';
         ctx.beginPath();
-        ctx.arc(0, -22, 6, 0, Math.PI * 2);
+        ctx.moveTo(-6, 4);
+        ctx.lineTo(-4, -12);
+        ctx.lineTo(4, -12);
+        ctx.lineTo(6, 4);
+        ctx.closePath();
         ctx.fill();
 
-        // Electric glow
-        ctx.fillStyle = 'rgba(255, 235, 59, 0.3)';
-        ctx.beginPath();
-        ctx.arc(0, -22, 10, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Lightning arcs
-        ctx.strokeStyle = '#ffeb3b';
+        // Lightning bolt
+        ctx.strokeStyle = '#fff';
         ctx.lineWidth = 2;
-        const arcCount = level >= 3 ? 4 : 2;
-        for (let i = 0; i < arcCount; i++) {
-            const angle = (time * 3 + i * Math.PI / 2) % (Math.PI * 2);
+        ctx.beginPath();
+        ctx.moveTo(0, -16);
+        ctx.lineTo(-4, -8);
+        ctx.lineTo(2, -8);
+        ctx.lineTo(-2, 0);
+        ctx.stroke();
+
+        // Tesla coil effect
+        if (ups.pathA === 3 && ups.pathAChoice === 'B') {
+            ctx.strokeStyle = 'rgba(255, 235, 59, 0.6)';
+            const time = Date.now() / 100;
             ctx.beginPath();
-            ctx.moveTo(0, -22);
-            const midX = Math.cos(angle) * 12 + (Math.random() - 0.5) * 4;
-            const midY = -22 + Math.sin(angle) * 10 + (Math.random() - 0.5) * 4;
-            ctx.lineTo(midX, midY);
-            ctx.lineTo(midX + (Math.random() - 0.5) * 8, midY + 8);
+            ctx.arc(0, -4, 12 + Math.sin(time) * 4, 0, Math.PI * 2);
             ctx.stroke();
         }
     },
 
-    // Barracks Tower - Small fort with knight
     drawBarracksTower(ctx, tower) {
-        const level = tower.level;
+        const ups = tower.upgrades || { pathA: 0, pathB: 0 };
 
-        // Fort base (stone wall)
+        // Building
+        ctx.fillStyle = '#795548';
+        ctx.fillRect(-14, -6, 28, 22);
+
+        // Roof
         ctx.fillStyle = '#5d4037';
-        ctx.fillRect(-18, -4, 36, 20);
-
-        // Battlements
-        ctx.fillStyle = '#4e342e';
-        for (let i = -16; i <= 12; i += 8) {
-            ctx.fillRect(i, -12, 6, 8);
-        }
+        ctx.beginPath();
+        ctx.moveTo(-16, -6);
+        ctx.lineTo(0, -18);
+        ctx.lineTo(16, -6);
+        ctx.closePath();
+        ctx.fill();
 
         // Door
-        ctx.fillStyle = '#3e2723';
-        ctx.beginPath();
-        ctx.moveTo(-6, 16);
-        ctx.lineTo(-6, 4);
-        ctx.arc(0, 4, 6, Math.PI, 0);
-        ctx.lineTo(6, 16);
-        ctx.fill();
+        ctx.fillStyle = '#4e342e';
+        ctx.fillRect(-4, 4, 8, 12);
 
-        // Knight figure
-        // Body armor
-        ctx.fillStyle = level >= 2 ? '#c0c0c0' : '#9e9e9e';
-        ctx.fillRect(-4, -8, 8, 12);
-
-        // Helmet
-        ctx.fillStyle = level >= 2 ? '#bdbdbd' : '#757575';
-        ctx.beginPath();
-        ctx.arc(0, -12, 5, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Helmet visor
-        ctx.fillStyle = '#424242';
-        ctx.fillRect(-3, -12, 6, 2);
-
-        // Shield
-        ctx.fillStyle = level >= 3 ? '#f44336' : '#795548';
-        ctx.beginPath();
-        ctx.moveTo(-10, -6);
-        ctx.lineTo(-10, 4);
-        ctx.lineTo(-6, 8);
-        ctx.lineTo(-6, -6);
-        ctx.closePath();
-        ctx.fill();
-
-        // Sword
-        ctx.fillStyle = '#bdbdbd';
-        ctx.fillRect(6, -16, 2, 20);
-        ctx.fillStyle = '#5d4037';
-        ctx.fillRect(4, -4, 6, 2);
-
-        // Banner (level 3)
-        if (level >= 3) {
-            ctx.fillStyle = '#f44336';
+        // Flag for upgrades
+        if (ups.pathA >= 1 || ups.pathB >= 1) {
+            ctx.fillStyle = ups.pathA >= 2 ? '#ffd700' : '#f44336';
             ctx.beginPath();
-            ctx.moveTo(14, -16);
-            ctx.lineTo(14, -4);
-            ctx.lineTo(20, -10);
-            ctx.closePath();
+            ctx.moveTo(8, -16);
+            ctx.lineTo(8, -24);
+            ctx.lineTo(16, -20);
+            ctx.lineTo(8, -16);
             ctx.fill();
         }
+
+        // Soldier icon
+        ctx.fillStyle = '#3949ab';
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('⚔', 0, 0);
     },
 
-    // Ultimate Tower - Grand tower with golden glow
     drawUltimateTower(ctx, tower) {
-        const level = tower.level;
-        const time = Date.now() / 1000;
-        const pulse = Math.sin(time * 2) * 0.15 + 0.85;
+        const ups = tower.upgrades || { pathA: 0, pathB: 0 };
 
-        // Golden aura
-        ctx.fillStyle = `rgba(255, 215, 0, ${0.2 * pulse})`;
-        ctx.beginPath();
-        ctx.arc(0, -4, 28, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Grand base
-        const baseGradient = ctx.createLinearGradient(-18, 0, 18, 0);
-        baseGradient.addColorStop(0, '#5d4037');
-        baseGradient.addColorStop(0.5, '#8d6e63');
-        baseGradient.addColorStop(1, '#5d4037');
-        ctx.fillStyle = baseGradient;
-        ctx.fillRect(-18, 4, 36, 14);
-
-        // Tower body
-        const towerGradient = ctx.createLinearGradient(0, -24, 0, 8);
-        towerGradient.addColorStop(0, '#ffd54f');
-        towerGradient.addColorStop(0.5, '#e91e63');
-        towerGradient.addColorStop(1, '#880e4f');
-        ctx.fillStyle = towerGradient;
+        // Grand tower base
+        const gradient = ctx.createLinearGradient(-12, 16, 12, -20);
+        gradient.addColorStop(0, '#880e4f');
+        gradient.addColorStop(0.5, '#e91e63');
+        gradient.addColorStop(1, '#f48fb1');
+        ctx.fillStyle = gradient;
 
         ctx.beginPath();
-        ctx.moveTo(-12, 8);
-        ctx.lineTo(-8, -16);
-        ctx.lineTo(8, -16);
-        ctx.lineTo(12, 8);
+        ctx.moveTo(-12, 16);
+        ctx.lineTo(-10, -16);
+        ctx.lineTo(10, -16);
+        ctx.lineTo(12, 16);
         ctx.closePath();
         ctx.fill();
 
-        // Tower top
+        // Crown
         ctx.fillStyle = '#ffd700';
         ctx.beginPath();
         ctx.moveTo(-8, -16);
-        ctx.lineTo(0, -28);
+        ctx.lineTo(-6, -22);
+        ctx.lineTo(-2, -18);
+        ctx.lineTo(0, -24);
+        ctx.lineTo(2, -18);
+        ctx.lineTo(6, -22);
         ctx.lineTo(8, -16);
         ctx.closePath();
         ctx.fill();
 
-        // Crown jewel
+        // Gem
         ctx.fillStyle = '#ff1744';
         ctx.beginPath();
-        ctx.arc(0, -20, 4, 0, Math.PI * 2);
+        ctx.arc(0, -4, 6, 0, Math.PI * 2);
         ctx.fill();
 
-        // Jewel glow
-        ctx.fillStyle = 'rgba(255, 23, 68, 0.4)';
-        ctx.beginPath();
-        ctx.arc(0, -20, 6 * pulse, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Side ornaments
-        ctx.fillStyle = '#ffd700';
-        ctx.beginPath();
-        ctx.arc(-14, -2, 4, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(14, -2, 4, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Energy particles (level 2+)
-        if (level >= 2) {
-            ctx.fillStyle = '#ffd700';
-            for (let i = 0; i < 6; i++) {
-                const angle = time * 2 + i * Math.PI / 3;
-                const dist = 20 + Math.sin(time * 3 + i) * 3;
-                const px = Math.cos(angle) * dist;
-                const py = Math.sin(angle) * dist - 8;
-                ctx.globalAlpha = 0.7 + Math.sin(time * 4 + i) * 0.3;
-                ctx.beginPath();
-                ctx.arc(px, py, 2, 0, Math.PI * 2);
-                ctx.fill();
-            }
-            ctx.globalAlpha = 1;
+        // Aura for support path
+        if (ups.pathB >= 1) {
+            ctx.strokeStyle = 'rgba(255, 215, 0, 0.4)';
+            ctx.lineWidth = 2;
+            const time = Date.now() / 400;
+            ctx.beginPath();
+            ctx.arc(0, 0, 20 + Math.sin(time) * 3, 0, Math.PI * 2);
+            ctx.stroke();
         }
     },
 
-    // Default tower fallback
     drawDefaultTower(ctx, tower) {
-        const color = this.TOWER_COLORS[tower.type] || '#888';
-        ctx.fillStyle = '#333';
-        ctx.beginPath();
-        ctx.arc(0, 0, 18, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = color;
+        ctx.fillStyle = this.TOWER_COLORS[tower.type] || '#888';
         ctx.beginPath();
         ctx.arc(0, 0, 15, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 14px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText(tower.type[0].toUpperCase(), 0, 5);
     },
 
     renderEnemies() {
         const ctx = this.ctx;
-        const time = Date.now() / 1000;
 
         for (const enemy of this.state.enemies) {
+            const x = enemy.x;
+            const y = enemy.y;
+
+            // Health bar background
+            ctx.fillStyle = '#333';
+            ctx.fillRect(x - 15, y - 25, 30, 4);
+
+            // Health bar
+            const hpPercent = enemy.hp / enemy.maxHp;
+            ctx.fillStyle = hpPercent > 0.5 ? '#4CAF50' : (hpPercent > 0.25 ? '#ff9800' : '#f44336');
+            ctx.fillRect(x - 15, y - 25, 30 * hpPercent, 4);
+
+            // Engaged indicator
+            if (enemy.engaged) {
+                ctx.fillStyle = '#ff5722';
+                ctx.font = '10px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('⚔️', x, y - 30);
+            }
+
+            // Draw enemy
             ctx.save();
-            ctx.translate(enemy.x, enemy.y);
+            ctx.translate(x, y);
 
-            // Walking bob animation
-            const bobAmount = enemy.flying ? 0 : Math.sin(time * 10 + enemy.id) * 2;
-            ctx.translate(0, bobAmount);
-
-            // Camo effect (semi-transparent)
-            if (enemy.camo) {
-                ctx.globalAlpha = 0.5 + Math.sin(time * 3) * 0.2;
+            // Effect visuals
+            let isSlowed = false;
+            let isPoisoned = false;
+            let isStunned = false;
+            for (const eff of enemy.effects) {
+                if (eff.type === 0) isSlowed = true;
+                if (eff.type === 1) isPoisoned = true;
+                if (eff.type === 4) isStunned = true;
             }
 
-            // Draw enemy based on type
-            switch (enemy.type) {
-                case 'goblin': this.drawGoblin(ctx, enemy); break;
-                case 'orc': this.drawOrc(ctx, enemy); break;
-                case 'orc_brute': this.drawOrcBrute(ctx, enemy); break;
-                case 'wolf_rider': this.drawWolfRider(ctx, enemy); break;
-                case 'troll': this.drawTroll(ctx, enemy, time); break;
-                case 'dark_mage': this.drawDarkMage(ctx, enemy, time); break;
-                case 'bat': this.drawBatSwarm(ctx, enemy, time); break;
-                case 'wyvern': this.drawWyvern(ctx, enemy, time); break;
-                case 'golem': this.drawGolem(ctx, enemy); break;
-                case 'assassin': this.drawAssassin(ctx, enemy); break;
-                case 'necromancer': this.drawNecromancer(ctx, enemy, time); break;
-                case 'dragon': this.drawDragon(ctx, enemy, time); break;
-                case 'giant': this.drawGiant(ctx, enemy); break;
-                case 'demon_knight': this.drawDemonKnight(ctx, enemy); break;
-                case 'demon_king': this.drawDemonKing(ctx, enemy, time); break;
-                default: this.drawDefaultEnemy(ctx, enemy); break;
+            if (isSlowed) {
+                ctx.fillStyle = 'rgba(0, 188, 212, 0.3)';
+                ctx.beginPath();
+                ctx.arc(0, 0, 14, 0, Math.PI * 2);
+                ctx.fill();
             }
 
-            ctx.globalAlpha = 1;
+            if (isPoisoned) {
+                ctx.strokeStyle = '#8bc34a';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(0, 0, 12, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+
+            if (isStunned) {
+                ctx.fillStyle = '#ffeb3b';
+                ctx.font = '12px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('💫', 0, -15);
+            }
+
+            // Enemy body
+            this.drawEnemy(ctx, enemy);
+
             ctx.restore();
 
-            // Health bar (outside transform)
-            this.drawEnemyHealthBar(ctx, enemy);
+            // Flying indicator
+            if (enemy.flying) {
+                ctx.fillStyle = 'rgba(255,255,255,0.5)';
+                ctx.font = '8px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('✈', x + 12, y - 10);
+            }
 
-            // Effect indicators
-            this.drawEnemyEffects(ctx, enemy);
+            // Camo indicator
+            if (enemy.camo) {
+                ctx.fillStyle = 'rgba(128,128,128,0.7)';
+                ctx.font = '8px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('👁', x - 12, y - 10);
+            }
         }
     },
 
-    drawEnemyHealthBar(ctx, enemy) {
-        const hpPercent = enemy.hp / enemy.maxHp;
-        const isBoss = ['dragon', 'giant', 'demon_knight', 'demon_king'].includes(enemy.type);
-        const barWidth = isBoss ? 40 : 24;
-        const barHeight = isBoss ? 6 : 4;
-        const barX = enemy.x - barWidth / 2;
-        const barY = enemy.y - (isBoss ? 28 : 18);
+    drawEnemy(ctx, enemy) {
+        const type = enemy.type;
 
-        // Background
-        ctx.fillStyle = '#1a1a1a';
-        ctx.fillRect(barX - 1, barY - 1, barWidth + 2, barHeight + 2);
-
-        // Health gradient
-        const healthColor = hpPercent > 0.6 ? '#4CAF50' : hpPercent > 0.3 ? '#FF9800' : '#f44336';
-        ctx.fillStyle = healthColor;
-        ctx.fillRect(barX, barY, barWidth * hpPercent, barHeight);
-
-        // Boss outline
-        if (isBoss) {
-            ctx.strokeStyle = '#ffd700';
-            ctx.lineWidth = 1;
-            ctx.strokeRect(barX - 1, barY - 1, barWidth + 2, barHeight + 2);
+        switch(type) {
+            case 'goblin':
+                this.drawGoblin(ctx);
+                break;
+            case 'orc':
+                this.drawOrc(ctx);
+                break;
+            case 'orc_brute':
+                this.drawOrcBrute(ctx);
+                break;
+            case 'wolf_rider':
+                this.drawWolfRider(ctx);
+                break;
+            case 'troll':
+                this.drawTroll(ctx);
+                break;
+            case 'dark_mage':
+                this.drawDarkMage(ctx);
+                break;
+            case 'bat':
+                this.drawBat(ctx);
+                break;
+            case 'wyvern':
+                this.drawWyvern(ctx);
+                break;
+            case 'golem':
+                this.drawGolem(ctx);
+                break;
+            case 'assassin':
+                this.drawAssassin(ctx);
+                break;
+            case 'necromancer':
+                this.drawNecromancer(ctx);
+                break;
+            case 'dragon':
+                this.drawDragon(ctx);
+                break;
+            case 'giant':
+                this.drawGiant(ctx);
+                break;
+            case 'demon_knight':
+                this.drawDemonKnight(ctx);
+                break;
+            case 'demon_king':
+                this.drawDemonKing(ctx);
+                break;
+            default:
+                // Fallback circle
+                ctx.fillStyle = '#888';
+                ctx.beginPath();
+                ctx.arc(0, 0, 10, 0, Math.PI * 2);
+                ctx.fill();
         }
     },
 
-    drawEnemyEffects(ctx, enemy) {
-        if (!enemy.effects || enemy.effects.length === 0) return;
-
-        let effectX = enemy.x - (enemy.effects.length - 1) * 4;
-        for (const effect of enemy.effects) {
-            // 0=SLOW, 1=POISON, 2=BURN
-            const colors = ['#00BCD4', '#8BC34A', '#FF5722'];
-            ctx.fillStyle = colors[effect] || '#fff';
-            ctx.beginPath();
-            ctx.arc(effectX, enemy.y + 14, 3, 0, Math.PI * 2);
-            ctx.fill();
-            effectX += 8;
-        }
-    },
-
-    // Goblin - Small green creature
-    drawGoblin(ctx, enemy) {
+    // GOBLIN - Small green creature with pointy ears
+    drawGoblin(ctx) {
         // Body
         ctx.fillStyle = '#7CB342';
         ctx.beginPath();
@@ -1360,250 +1176,270 @@ const TowerDefenseRenderer = {
         // Head
         ctx.fillStyle = '#8BC34A';
         ctx.beginPath();
-        ctx.arc(0, -8, 5, 0, Math.PI * 2);
+        ctx.arc(0, -8, 6, 0, Math.PI * 2);
         ctx.fill();
 
         // Pointy ears
         ctx.fillStyle = '#7CB342';
         ctx.beginPath();
-        ctx.moveTo(-5, -10);
-        ctx.lineTo(-9, -14);
-        ctx.lineTo(-4, -8);
+        ctx.moveTo(-6, -10);
+        ctx.lineTo(-10, -16);
+        ctx.lineTo(-4, -12);
         ctx.fill();
         ctx.beginPath();
-        ctx.moveTo(5, -10);
-        ctx.lineTo(9, -14);
-        ctx.lineTo(4, -8);
+        ctx.moveTo(6, -10);
+        ctx.lineTo(10, -16);
+        ctx.lineTo(4, -12);
         ctx.fill();
 
-        // Eyes
-        ctx.fillStyle = '#fff';
+        // Eyes (red, menacing)
+        ctx.fillStyle = '#f44336';
         ctx.beginPath();
-        ctx.arc(-2, -9, 2, 0, Math.PI * 2);
-        ctx.arc(2, -9, 2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#000';
-        ctx.beginPath();
-        ctx.arc(-2, -9, 1, 0, Math.PI * 2);
-        ctx.arc(2, -9, 1, 0, Math.PI * 2);
+        ctx.arc(-2, -9, 1.5, 0, Math.PI * 2);
+        ctx.arc(2, -9, 1.5, 0, Math.PI * 2);
         ctx.fill();
 
         // Small dagger
-        ctx.fillStyle = '#9e9e9e';
-        ctx.fillRect(6, -2, 2, 8);
+        ctx.fillStyle = '#9E9E9E';
+        ctx.fillRect(6, -2, 8, 2);
+        ctx.fillStyle = '#795548';
+        ctx.fillRect(4, -3, 3, 4);
     },
 
-    // Orc - Large muscular figure
-    drawOrc(ctx, enemy) {
-        // Body
+    // ORC - Bulky green warrior with tusks
+    drawOrc(ctx) {
+        // Body (muscular)
         ctx.fillStyle = '#5D4037';
+        ctx.fillRect(-8, -2, 16, 14); // armor
+        ctx.fillStyle = '#4E7A27';
         ctx.beginPath();
-        ctx.ellipse(0, 2, 8, 10, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, 4, 9, 10, 0, 0, Math.PI * 2);
         ctx.fill();
 
         // Head
-        ctx.fillStyle = '#6D4C41';
+        ctx.fillStyle = '#558B2F';
         ctx.beginPath();
-        ctx.arc(0, -10, 7, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Jaw
-        ctx.fillStyle = '#5D4037';
-        ctx.beginPath();
-        ctx.arc(0, -6, 5, 0, Math.PI);
+        ctx.arc(0, -10, 8, 0, Math.PI * 2);
         ctx.fill();
 
         // Tusks
-        ctx.fillStyle = '#e0e0e0';
+        ctx.fillStyle = '#FFFDE7';
         ctx.beginPath();
-        ctx.moveTo(-4, -5);
-        ctx.lineTo(-6, -1);
-        ctx.lineTo(-3, -3);
+        ctx.moveTo(-4, -4);
+        ctx.lineTo(-6, 2);
+        ctx.lineTo(-2, -2);
         ctx.fill();
         ctx.beginPath();
-        ctx.moveTo(4, -5);
-        ctx.lineTo(6, -1);
-        ctx.lineTo(3, -3);
+        ctx.moveTo(4, -4);
+        ctx.lineTo(6, 2);
+        ctx.lineTo(2, -2);
         ctx.fill();
 
         // Eyes
-        ctx.fillStyle = '#ff5722';
+        ctx.fillStyle = '#FF5722';
         ctx.beginPath();
         ctx.arc(-3, -11, 2, 0, Math.PI * 2);
         ctx.arc(3, -11, 2, 0, Math.PI * 2);
         ctx.fill();
 
-        // Weapon (axe)
-        ctx.fillStyle = '#5d4037';
-        ctx.fillRect(10, -8, 3, 16);
-        ctx.fillStyle = '#757575';
+        // Axe
+        ctx.fillStyle = '#795548';
+        ctx.fillRect(10, -14, 3, 20);
+        ctx.fillStyle = '#607D8B';
         ctx.beginPath();
-        ctx.moveTo(10, -8);
-        ctx.lineTo(18, -4);
-        ctx.lineTo(18, 2);
-        ctx.lineTo(10, 0);
+        ctx.moveTo(13, -12);
+        ctx.lineTo(20, -8);
+        ctx.lineTo(20, -2);
+        ctx.lineTo(13, 2);
         ctx.fill();
     },
 
-    // Orc Brute - Heavy armored orc
-    drawOrcBrute(ctx, enemy) {
-        // Armor body
-        ctx.fillStyle = '#3E2723';
+    // ORC_BRUTE - Massive armored orc
+    drawOrcBrute(ctx) {
+        // Heavy armor body
+        ctx.fillStyle = '#37474F';
         ctx.beginPath();
-        ctx.ellipse(0, 2, 10, 12, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, 4, 12, 14, 0, 0, Math.PI * 2);
         ctx.fill();
 
         // Armor plates
-        ctx.fillStyle = '#4e342e';
-        ctx.fillRect(-8, -4, 16, 12);
-        ctx.strokeStyle = '#5d4037';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(-8, -4, 16, 12);
+        ctx.fillStyle = '#263238';
+        ctx.fillRect(-10, -4, 20, 6);
+        ctx.fillRect(-8, 2, 16, 8);
 
         // Head with helmet
-        ctx.fillStyle = '#5d4037';
+        ctx.fillStyle = '#33691E';
         ctx.beginPath();
-        ctx.arc(0, -10, 8, 0, Math.PI * 2);
+        ctx.arc(0, -12, 9, 0, Math.PI * 2);
         ctx.fill();
 
         // Helmet
-        ctx.fillStyle = '#424242';
+        ctx.fillStyle = '#455A64';
         ctx.beginPath();
-        ctx.arc(0, -12, 7, Math.PI, 0);
+        ctx.arc(0, -14, 10, Math.PI, 0);
+        ctx.fill();
+        ctx.fillRect(-10, -14, 20, 4);
+
+        // Glowing eyes through helmet
+        ctx.fillStyle = '#FFEB3B';
+        ctx.beginPath();
+        ctx.arc(-4, -12, 2, 0, Math.PI * 2);
+        ctx.arc(4, -12, 2, 0, Math.PI * 2);
         ctx.fill();
 
-        // Eye slits
-        ctx.fillStyle = '#ff5722';
-        ctx.fillRect(-5, -11, 4, 2);
-        ctx.fillRect(1, -11, 4, 2);
-
-        // Spikes
-        ctx.fillStyle = '#616161';
+        // Huge mace
+        ctx.fillStyle = '#5D4037';
+        ctx.fillRect(14, -16, 4, 24);
+        ctx.fillStyle = '#37474F';
         ctx.beginPath();
-        ctx.moveTo(-6, -18);
-        ctx.lineTo(-4, -12);
-        ctx.lineTo(-8, -12);
+        ctx.arc(16, -18, 8, 0, Math.PI * 2);
         ctx.fill();
-        ctx.beginPath();
-        ctx.moveTo(6, -18);
-        ctx.lineTo(4, -12);
-        ctx.lineTo(8, -12);
-        ctx.fill();
+        // Spikes on mace
+        ctx.fillStyle = '#263238';
+        for (let i = 0; i < 6; i++) {
+            const angle = (i / 6) * Math.PI * 2;
+            ctx.beginPath();
+            ctx.moveTo(16 + Math.cos(angle) * 6, -18 + Math.sin(angle) * 6);
+            ctx.lineTo(16 + Math.cos(angle) * 12, -18 + Math.sin(angle) * 12);
+            ctx.lineTo(16 + Math.cos(angle + 0.3) * 6, -18 + Math.sin(angle + 0.3) * 6);
+            ctx.fill();
+        }
     },
 
-    // Wolf Rider - Orc on wolf
-    drawWolfRider(ctx, enemy) {
+    // WOLF_RIDER - Goblin riding a wolf
+    drawWolfRider(ctx) {
         // Wolf body
         ctx.fillStyle = '#616161';
         ctx.beginPath();
-        ctx.ellipse(0, 6, 12, 6, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, 4, 14, 8, 0, 0, Math.PI * 2);
         ctx.fill();
 
         // Wolf head
         ctx.fillStyle = '#757575';
         ctx.beginPath();
-        ctx.ellipse(10, 2, 6, 5, -0.3, 0, Math.PI * 2);
+        ctx.ellipse(12, 0, 8, 6, -0.3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Wolf snout
+        ctx.fillStyle = '#9E9E9E';
+        ctx.beginPath();
+        ctx.ellipse(18, 2, 4, 3, 0, 0, Math.PI * 2);
         ctx.fill();
 
         // Wolf ears
+        ctx.fillStyle = '#616161';
         ctx.beginPath();
-        ctx.moveTo(8, -2);
-        ctx.lineTo(6, -8);
-        ctx.lineTo(10, -4);
+        ctx.moveTo(8, -4);
+        ctx.lineTo(6, -12);
+        ctx.lineTo(12, -6);
         ctx.fill();
         ctx.beginPath();
-        ctx.moveTo(12, -2);
-        ctx.lineTo(14, -8);
-        ctx.lineTo(12, -4);
-        ctx.fill();
-
-        // Orc rider
-        ctx.fillStyle = '#5D4037';
-        ctx.beginPath();
-        ctx.ellipse(-2, -4, 5, 6, 0, 0, Math.PI * 2);
+        ctx.moveTo(14, -4);
+        ctx.lineTo(16, -12);
+        ctx.lineTo(18, -4);
         ctx.fill();
 
-        // Rider head
-        ctx.fillStyle = '#6D4C41';
+        // Wolf eye
+        ctx.fillStyle = '#FFEB3B';
         ctx.beginPath();
-        ctx.arc(-2, -12, 4, 0, Math.PI * 2);
+        ctx.arc(14, -1, 2, 0, Math.PI * 2);
         ctx.fill();
 
-        // Spear
-        ctx.fillStyle = '#5d4037';
-        ctx.fillRect(4, -18, 2, 20);
-        ctx.fillStyle = '#9e9e9e';
+        // Wolf legs
+        ctx.fillStyle = '#616161';
+        ctx.fillRect(-10, 8, 3, 8);
+        ctx.fillRect(-4, 8, 3, 8);
+        ctx.fillRect(4, 8, 3, 8);
+        ctx.fillRect(10, 8, 3, 8);
+
+        // Goblin rider (smaller)
+        ctx.fillStyle = '#8BC34A';
         ctx.beginPath();
-        ctx.moveTo(4, -18);
-        ctx.lineTo(5, -24);
-        ctx.lineTo(6, -18);
+        ctx.arc(-2, -8, 5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Rider ears
+        ctx.fillStyle = '#7CB342';
+        ctx.beginPath();
+        ctx.moveTo(-6, -10);
+        ctx.lineTo(-10, -14);
+        ctx.lineTo(-4, -10);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(2, -10);
+        ctx.lineTo(6, -14);
+        ctx.lineTo(4, -10);
+        ctx.fill();
+
+        // Rider spear
+        ctx.fillStyle = '#795548';
+        ctx.fillRect(2, -18, 2, 20);
+        ctx.fillStyle = '#9E9E9E';
+        ctx.beginPath();
+        ctx.moveTo(3, -18);
+        ctx.lineTo(0, -24);
+        ctx.lineTo(6, -24);
+        ctx.closePath();
         ctx.fill();
     },
 
-    // Troll - Regenerating monster
-    drawTroll(ctx, enemy, time) {
+    // TROLL - Large regenerating monster
+    drawTroll(ctx) {
         // Large body
         ctx.fillStyle = '#2E7D32';
         ctx.beginPath();
-        ctx.ellipse(0, 4, 12, 14, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, 6, 14, 16, 0, 0, Math.PI * 2);
         ctx.fill();
 
         // Head
         ctx.fillStyle = '#388E3C';
         ctx.beginPath();
-        ctx.arc(0, -12, 8, 0, Math.PI * 2);
+        ctx.ellipse(0, -14, 10, 8, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        // Warts
-        ctx.fillStyle = '#1B5E20';
+        // Big nose
+        ctx.fillStyle = '#2E7D32';
         ctx.beginPath();
-        ctx.arc(-4, -14, 2, 0, Math.PI * 2);
-        ctx.arc(5, -10, 2, 0, Math.PI * 2);
-        ctx.arc(-6, 0, 3, 0, Math.PI * 2);
+        ctx.ellipse(0, -10, 4, 6, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        // Eyes
-        ctx.fillStyle = '#ffeb3b';
+        // Small eyes
+        ctx.fillStyle = '#FFEB3B';
         ctx.beginPath();
-        ctx.arc(-3, -13, 3, 0, Math.PI * 2);
-        ctx.arc(3, -13, 3, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#000';
-        ctx.beginPath();
-        ctx.arc(-3, -13, 1.5, 0, Math.PI * 2);
-        ctx.arc(3, -13, 1.5, 0, Math.PI * 2);
+        ctx.arc(-5, -16, 2, 0, Math.PI * 2);
+        ctx.arc(5, -16, 2, 0, Math.PI * 2);
         ctx.fill();
 
-        // Regeneration sparkles
-        if (enemy.hp < enemy.maxHp) {
-            ctx.fillStyle = '#76ff03';
-            for (let i = 0; i < 3; i++) {
-                const angle = time * 3 + i * 2;
-                const px = Math.cos(angle) * 14;
-                const py = Math.sin(angle) * 14;
-                ctx.globalAlpha = 0.5 + Math.sin(time * 5 + i) * 0.3;
-                ctx.beginPath();
-                ctx.arc(px, py, 2, 0, Math.PI * 2);
-                ctx.fill();
-            }
-            ctx.globalAlpha = 1;
-        }
+        // Big arms
+        ctx.fillStyle = '#388E3C';
+        ctx.beginPath();
+        ctx.ellipse(-16, 0, 6, 12, 0.3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(16, 0, 6, 12, -0.3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Regen glow effect
+        ctx.fillStyle = 'rgba(76, 175, 80, 0.3)';
+        ctx.beginPath();
+        ctx.arc(0, 0, 22, 0, Math.PI * 2);
+        ctx.fill();
     },
 
-    // Dark Mage - Hooded spellcaster
-    drawDarkMage(ctx, enemy, time) {
-        // Robe
+    // DARK_MAGE - Robed spellcaster
+    drawDarkMage(ctx) {
+        // Robe body
         ctx.fillStyle = '#4A148C';
         ctx.beginPath();
-        ctx.moveTo(-8, 12);
-        ctx.lineTo(-6, -4);
-        ctx.lineTo(6, -4);
-        ctx.lineTo(8, 12);
+        ctx.moveTo(-8, -6);
+        ctx.lineTo(-12, 14);
+        ctx.lineTo(12, 14);
+        ctx.lineTo(8, -6);
         ctx.closePath();
         ctx.fill();
 
         // Hood
-        ctx.fillStyle = '#311B92';
+        ctx.fillStyle = '#38006b';
         ctx.beginPath();
         ctx.arc(0, -8, 8, 0, Math.PI * 2);
         ctx.fill();
@@ -1611,420 +1447,492 @@ const TowerDefenseRenderer = {
         ctx.moveTo(-8, -8);
         ctx.lineTo(0, -18);
         ctx.lineTo(8, -8);
+        ctx.closePath();
         ctx.fill();
 
-        // Face shadow
-        ctx.fillStyle = '#1A0033';
+        // Glowing eyes in hood
+        ctx.fillStyle = '#E040FB';
         ctx.beginPath();
-        ctx.ellipse(0, -6, 5, 6, 0, 0, Math.PI * 2);
+        ctx.arc(-3, -8, 2, 0, Math.PI * 2);
+        ctx.arc(3, -8, 2, 0, Math.PI * 2);
         ctx.fill();
 
-        // Glowing eyes
-        ctx.fillStyle = '#e040fb';
-        ctx.beginPath();
-        ctx.arc(-2, -7, 2, 0, Math.PI * 2);
-        ctx.arc(2, -7, 2, 0, Math.PI * 2);
-        ctx.fill();
+        // Staff
+        ctx.fillStyle = '#4E342E';
+        ctx.fillRect(10, -20, 2, 34);
 
-        // Magic orb
-        const orbPulse = Math.sin(time * 4) * 0.3 + 0.7;
-        ctx.fillStyle = `rgba(156, 39, 176, ${orbPulse})`;
+        // Staff orb
+        ctx.fillStyle = '#9C27B0';
         ctx.beginPath();
-        ctx.arc(10, -2, 5, 0, Math.PI * 2);
+        ctx.arc(11, -22, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(224, 64, 251, 0.5)';
+        ctx.beginPath();
+        ctx.arc(11, -22, 8, 0, Math.PI * 2);
         ctx.fill();
     },
 
-    // Bat Swarm - Multiple small bats
-    drawBatSwarm(ctx, enemy, time) {
+    // BAT - Flying bat swarm
+    drawBat(ctx) {
+        // Body
         ctx.fillStyle = '#424242';
-        for (let i = 0; i < 5; i++) {
-            const offsetX = Math.sin(time * 8 + i * 1.5) * 8;
-            const offsetY = Math.cos(time * 6 + i * 1.2) * 6;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 4, 6, 0, 0, Math.PI * 2);
+        ctx.fill();
 
-            ctx.save();
-            ctx.translate(offsetX, offsetY);
+        // Wings
+        ctx.fillStyle = '#212121';
+        // Left wing
+        ctx.beginPath();
+        ctx.moveTo(-2, -2);
+        ctx.quadraticCurveTo(-14, -8, -16, 0);
+        ctx.quadraticCurveTo(-12, 4, -2, 2);
+        ctx.fill();
+        // Right wing
+        ctx.beginPath();
+        ctx.moveTo(2, -2);
+        ctx.quadraticCurveTo(14, -8, 16, 0);
+        ctx.quadraticCurveTo(12, 4, 2, 2);
+        ctx.fill();
 
-            // Bat body
-            ctx.beginPath();
-            ctx.ellipse(0, 0, 4, 3, 0, 0, Math.PI * 2);
-            ctx.fill();
+        // Ears
+        ctx.fillStyle = '#424242';
+        ctx.beginPath();
+        ctx.moveTo(-2, -6);
+        ctx.lineTo(-4, -12);
+        ctx.lineTo(0, -8);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(2, -6);
+        ctx.lineTo(4, -12);
+        ctx.lineTo(0, -8);
+        ctx.fill();
 
-            // Wings
-            const wingFlap = Math.sin(time * 20 + i) * 0.5;
-            ctx.beginPath();
-            ctx.moveTo(-3, 0);
-            ctx.quadraticCurveTo(-8, -4 + wingFlap * 4, -10, 2);
-            ctx.lineTo(-3, 2);
-            ctx.fill();
-            ctx.beginPath();
-            ctx.moveTo(3, 0);
-            ctx.quadraticCurveTo(8, -4 + wingFlap * 4, 10, 2);
-            ctx.lineTo(3, 2);
-            ctx.fill();
-
-            ctx.restore();
-        }
+        // Red eyes
+        ctx.fillStyle = '#f44336';
+        ctx.beginPath();
+        ctx.arc(-2, -4, 1.5, 0, Math.PI * 2);
+        ctx.arc(2, -4, 1.5, 0, Math.PI * 2);
+        ctx.fill();
     },
 
-    // Wyvern - Flying dragon-like creature
-    drawWyvern(ctx, enemy, time) {
-        const wingFlap = Math.sin(time * 8) * 0.4;
-
+    // WYVERN - Flying dragon-like creature
+    drawWyvern(ctx) {
         // Body
         ctx.fillStyle = '#1565C0';
         ctx.beginPath();
-        ctx.ellipse(0, 0, 10, 6, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, 0, 10, 8, 0, 0, Math.PI * 2);
         ctx.fill();
 
         // Head
         ctx.fillStyle = '#1976D2';
         ctx.beginPath();
-        ctx.ellipse(10, -4, 6, 4, -0.3, 0, Math.PI * 2);
+        ctx.ellipse(12, -4, 6, 5, -0.3, 0, Math.PI * 2);
         ctx.fill();
 
         // Snout
+        ctx.fillStyle = '#1565C0';
         ctx.beginPath();
-        ctx.moveTo(14, -4);
-        ctx.lineTo(20, -2);
-        ctx.lineTo(14, 0);
+        ctx.moveTo(16, -4);
+        ctx.lineTo(24, -2);
+        ctx.lineTo(16, 0);
+        ctx.closePath();
         ctx.fill();
 
         // Wings
         ctx.fillStyle = '#0D47A1';
-        ctx.save();
-        ctx.rotate(wingFlap);
+        // Left wing
         ctx.beginPath();
-        ctx.moveTo(-4, -2);
-        ctx.quadraticCurveTo(-14, -20, -20, -8);
-        ctx.lineTo(-8, 0);
+        ctx.moveTo(-4, -4);
+        ctx.lineTo(-20, -16);
+        ctx.lineTo(-24, -6);
+        ctx.lineTo(-16, 0);
+        ctx.lineTo(-4, 0);
         ctx.fill();
-        ctx.restore();
-
-        ctx.save();
-        ctx.rotate(-wingFlap);
+        // Right wing
         ctx.beginPath();
-        ctx.moveTo(4, -2);
-        ctx.quadraticCurveTo(14, -20, 20, -8);
-        ctx.lineTo(8, 0);
-        ctx.fill();
-        ctx.restore();
-
-        // Tail
-        ctx.beginPath();
-        ctx.moveTo(-8, 2);
-        ctx.quadraticCurveTo(-16, 8, -18, 4);
-        ctx.lineTo(-10, 0);
+        ctx.moveTo(4, -4);
+        ctx.lineTo(8, -16);
+        ctx.lineTo(0, -20);
+        ctx.lineTo(-6, -10);
+        ctx.lineTo(4, 0);
         ctx.fill();
 
         // Eye
-        ctx.fillStyle = '#ffeb3b';
+        ctx.fillStyle = '#FFEB3B';
         ctx.beginPath();
-        ctx.arc(12, -5, 2, 0, Math.PI * 2);
+        ctx.arc(14, -5, 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Tail
+        ctx.fillStyle = '#1565C0';
+        ctx.beginPath();
+        ctx.moveTo(-8, 2);
+        ctx.quadraticCurveTo(-16, 8, -20, 4);
+        ctx.lineTo(-18, 0);
+        ctx.quadraticCurveTo(-14, 4, -8, 0);
         ctx.fill();
     },
 
-    // Golem - Magic immune stone creature
-    drawGolem(ctx, enemy) {
-        // Body (rocky)
+    // GOLEM - Stone/rock monster
+    drawGolem(ctx) {
+        // Main body (rocky)
         ctx.fillStyle = '#78909C';
         ctx.beginPath();
-        ctx.moveTo(-10, 12);
-        ctx.lineTo(-12, 0);
-        ctx.lineTo(-8, -8);
-        ctx.lineTo(8, -8);
-        ctx.lineTo(12, 0);
-        ctx.lineTo(10, 12);
+        ctx.moveTo(-12, 16);
+        ctx.lineTo(-14, 4);
+        ctx.lineTo(-12, -8);
+        ctx.lineTo(-6, -14);
+        ctx.lineTo(6, -14);
+        ctx.lineTo(12, -8);
+        ctx.lineTo(14, 4);
+        ctx.lineTo(12, 16);
         ctx.closePath();
         ctx.fill();
 
         // Rock texture lines
-        ctx.strokeStyle = '#546e7a';
+        ctx.strokeStyle = '#546E7A';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.moveTo(-6, -4);
-        ctx.lineTo(-4, 8);
-        ctx.moveTo(2, -6);
-        ctx.lineTo(6, 6);
+        ctx.moveTo(-8, -10);
+        ctx.lineTo(-4, 0);
+        ctx.lineTo(-10, 8);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(6, -8);
+        ctx.lineTo(8, 2);
+        ctx.lineTo(4, 10);
         ctx.stroke();
 
-        // Head
-        ctx.fillStyle = '#90A4AE';
+        // Glowing rune in chest
+        ctx.fillStyle = '#00BCD4';
         ctx.beginPath();
-        ctx.moveTo(-8, -8);
-        ctx.lineTo(-4, -18);
-        ctx.lineTo(4, -18);
-        ctx.lineTo(8, -8);
+        ctx.moveTo(0, -4);
+        ctx.lineTo(-4, 2);
+        ctx.lineTo(0, 8);
+        ctx.lineTo(4, 2);
         ctx.closePath();
         ctx.fill();
-
-        // Glowing rune eyes
-        ctx.fillStyle = '#00bcd4';
+        ctx.fillStyle = 'rgba(0, 188, 212, 0.4)';
         ctx.beginPath();
-        ctx.arc(-3, -12, 3, 0, Math.PI * 2);
-        ctx.arc(3, -12, 3, 0, Math.PI * 2);
+        ctx.arc(0, 2, 10, 0, Math.PI * 2);
         ctx.fill();
 
-        // Magic immunity aura
-        ctx.strokeStyle = 'rgba(0, 188, 212, 0.3)';
-        ctx.lineWidth = 3;
+        // Eyes (glowing)
+        ctx.fillStyle = '#00BCD4';
         ctx.beginPath();
-        ctx.arc(0, 0, 16, 0, Math.PI * 2);
-        ctx.stroke();
+        ctx.arc(-5, -8, 3, 0, Math.PI * 2);
+        ctx.arc(5, -8, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Arms (rocky)
+        ctx.fillStyle = '#607D8B';
+        ctx.beginPath();
+        ctx.ellipse(-18, 2, 6, 10, 0.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(18, 2, 6, 10, -0.2, 0, Math.PI * 2);
+        ctx.fill();
     },
 
-    // Assassin - Camo enemy
-    drawAssassin(ctx, enemy) {
-        // Cloak
+    // ASSASSIN - Stealthy cloaked figure
+    drawAssassin(ctx) {
+        // Cloak body
         ctx.fillStyle = '#37474F';
         ctx.beginPath();
-        ctx.moveTo(-6, 10);
-        ctx.lineTo(-8, -2);
-        ctx.lineTo(0, -6);
-        ctx.lineTo(8, -2);
-        ctx.lineTo(6, 10);
+        ctx.moveTo(-6, -4);
+        ctx.lineTo(-8, 12);
+        ctx.lineTo(8, 12);
+        ctx.lineTo(6, -4);
         ctx.closePath();
         ctx.fill();
 
         // Hood
         ctx.fillStyle = '#263238';
         ctx.beginPath();
-        ctx.arc(0, -8, 6, 0, Math.PI * 2);
+        ctx.arc(0, -6, 6, 0, Math.PI * 2);
         ctx.fill();
         ctx.beginPath();
-        ctx.moveTo(-6, -8);
-        ctx.lineTo(0, -16);
-        ctx.lineTo(6, -8);
+        ctx.moveTo(-6, -6);
+        ctx.lineTo(0, -14);
+        ctx.lineTo(6, -6);
+        ctx.closePath();
         ctx.fill();
 
-        // Eyes (barely visible)
-        ctx.fillStyle = '#b0bec5';
+        // Face shadow (barely visible)
+        ctx.fillStyle = '#1a1a1a';
         ctx.beginPath();
-        ctx.arc(-2, -8, 1.5, 0, Math.PI * 2);
-        ctx.arc(2, -8, 1.5, 0, Math.PI * 2);
+        ctx.arc(0, -5, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Glinting eyes
+        ctx.fillStyle = '#B0BEC5';
+        ctx.beginPath();
+        ctx.arc(-2, -6, 1, 0, Math.PI * 2);
+        ctx.arc(2, -6, 1, 0, Math.PI * 2);
         ctx.fill();
 
         // Daggers
-        ctx.fillStyle = '#9e9e9e';
-        ctx.fillRect(-12, -4, 6, 2);
-        ctx.fillRect(6, -4, 6, 2);
+        ctx.fillStyle = '#9E9E9E';
+        ctx.save();
+        ctx.translate(-8, 0);
+        ctx.rotate(-0.5);
+        ctx.fillRect(0, -1, 10, 2);
+        ctx.restore();
+        ctx.save();
+        ctx.translate(8, 0);
+        ctx.rotate(0.5);
+        ctx.fillRect(-10, -1, 10, 2);
+        ctx.restore();
     },
 
-    // Necromancer - Resurrects dead
-    drawNecromancer(ctx, enemy, time) {
-        // Dark robe
-        ctx.fillStyle = '#1A237E';
+    // NECROMANCER - Dark robed magic user with skull staff
+    drawNecromancer(ctx) {
+        // Robe
+        ctx.fillStyle = '#1a1a1a';
         ctx.beginPath();
-        ctx.moveTo(-8, 12);
-        ctx.lineTo(-6, -4);
-        ctx.lineTo(6, -4);
-        ctx.lineTo(8, 12);
+        ctx.moveTo(-8, -4);
+        ctx.lineTo(-14, 16);
+        ctx.lineTo(14, 16);
+        ctx.lineTo(8, -4);
         ctx.closePath();
         ctx.fill();
 
         // Hood
-        ctx.fillStyle = '#0D1B4A';
+        ctx.fillStyle = '#0d0d0d';
         ctx.beginPath();
-        ctx.arc(0, -8, 7, 0, Math.PI * 2);
+        ctx.arc(0, -8, 8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(-8, -8);
+        ctx.lineTo(0, -20);
+        ctx.lineTo(8, -8);
+        ctx.closePath();
         ctx.fill();
 
-        // Skull face
-        ctx.fillStyle = '#e0e0e0';
+        // Glowing green eyes
+        ctx.fillStyle = '#76FF03';
         ctx.beginPath();
-        ctx.arc(0, -6, 5, 0, Math.PI * 2);
+        ctx.arc(-3, -8, 2, 0, Math.PI * 2);
+        ctx.arc(3, -8, 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(118, 255, 3, 0.3)';
+        ctx.beginPath();
+        ctx.arc(0, -8, 6, 0, Math.PI * 2);
         ctx.fill();
 
-        // Eye sockets
-        ctx.fillStyle = '#000';
-        ctx.beginPath();
-        ctx.arc(-2, -7, 2, 0, Math.PI * 2);
-        ctx.arc(2, -7, 2, 0, Math.PI * 2);
-        ctx.fill();
+        // Staff with skull
+        ctx.fillStyle = '#3E2723';
+        ctx.fillRect(12, -24, 2, 38);
 
-        // Glowing eyes
-        ctx.fillStyle = '#7c4dff';
+        // Skull on staff
+        ctx.fillStyle = '#ECEFF1';
         ctx.beginPath();
-        ctx.arc(-2, -7, 1, 0, Math.PI * 2);
-        ctx.arc(2, -7, 1, 0, Math.PI * 2);
+        ctx.arc(13, -28, 5, 0, Math.PI * 2);
         ctx.fill();
-
-        // Staff
-        ctx.fillStyle = '#5d4037';
-        ctx.fillRect(10, -16, 3, 24);
-
-        // Staff skull
-        ctx.fillStyle = '#e0e0e0';
+        // Skull eyes
+        ctx.fillStyle = '#76FF03';
         ctx.beginPath();
-        ctx.arc(11.5, -18, 4, 0, Math.PI * 2);
+        ctx.arc(11, -29, 1.5, 0, Math.PI * 2);
+        ctx.arc(15, -29, 1.5, 0, Math.PI * 2);
         ctx.fill();
-
-        // Dark energy
-        ctx.fillStyle = `rgba(124, 77, 255, ${0.3 + Math.sin(time * 4) * 0.2})`;
-        ctx.beginPath();
-        ctx.arc(0, 0, 12, 0, Math.PI * 2);
-        ctx.fill();
+        // Skull teeth
+        ctx.fillStyle = '#ECEFF1';
+        ctx.fillRect(10, -25, 6, 2);
     },
 
-    // Dragon - Flying boss
-    drawDragon(ctx, enemy, time) {
-        const wingFlap = Math.sin(time * 6) * 0.5;
-
-        // Body
+    // DRAGON - Large flying boss
+    drawDragon(ctx) {
+        // Main body
         ctx.fillStyle = '#C62828';
         ctx.beginPath();
-        ctx.ellipse(0, 0, 16, 10, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, 4, 16, 12, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        // Neck and head
+        // Scales detail
+        ctx.fillStyle = '#B71C1C';
+        for (let i = -12; i < 12; i += 6) {
+            ctx.beginPath();
+            ctx.arc(i, 4, 4, 0, Math.PI);
+            ctx.fill();
+        }
+
+        // Head
         ctx.fillStyle = '#D32F2F';
         ctx.beginPath();
-        ctx.ellipse(14, -6, 8, 5, -0.4, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.ellipse(22, -10, 6, 5, -0.3, 0, Math.PI * 2);
+        ctx.ellipse(18, -4, 10, 8, -0.2, 0, Math.PI * 2);
         ctx.fill();
 
         // Snout
-        ctx.fillStyle = '#B71C1C';
+        ctx.fillStyle = '#C62828';
         ctx.beginPath();
-        ctx.moveTo(26, -10);
-        ctx.lineTo(34, -8);
-        ctx.lineTo(26, -6);
+        ctx.moveTo(24, -4);
+        ctx.lineTo(34, 0);
+        ctx.lineTo(24, 4);
+        ctx.closePath();
+        ctx.fill();
+
+        // Horns
+        ctx.fillStyle = '#4E342E';
+        ctx.beginPath();
+        ctx.moveTo(12, -10);
+        ctx.lineTo(8, -22);
+        ctx.lineTo(16, -12);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(20, -10);
+        ctx.lineTo(24, -22);
+        ctx.lineTo(22, -12);
         ctx.fill();
 
         // Wings
-        ctx.fillStyle = '#8B0000';
-        ctx.save();
-        ctx.rotate(wingFlap);
+        ctx.fillStyle = '#B71C1C';
+        // Left wing
         ctx.beginPath();
-        ctx.moveTo(-6, -4);
-        ctx.quadraticCurveTo(-24, -36, -30, -12);
-        ctx.lineTo(-10, 0);
+        ctx.moveTo(-8, -4);
+        ctx.lineTo(-28, -24);
+        ctx.lineTo(-34, -10);
+        ctx.lineTo(-26, 2);
+        ctx.lineTo(-8, 4);
         ctx.fill();
-        ctx.restore();
+        // Wing bones
+        ctx.strokeStyle = '#8B0000';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(-8, -2);
+        ctx.lineTo(-28, -24);
+        ctx.moveTo(-14, -6);
+        ctx.lineTo(-30, -14);
+        ctx.stroke();
 
-        ctx.save();
-        ctx.rotate(-wingFlap);
+        // Eye
+        ctx.fillStyle = '#FFEB3B';
         ctx.beginPath();
-        ctx.moveTo(6, -4);
-        ctx.quadraticCurveTo(24, -36, 30, -12);
-        ctx.lineTo(10, 0);
+        ctx.arc(22, -6, 3, 0, Math.PI * 2);
         ctx.fill();
-        ctx.restore();
+        ctx.fillStyle = '#000';
+        ctx.beginPath();
+        ctx.arc(22, -6, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Fire breath effect
+        ctx.fillStyle = 'rgba(255, 152, 0, 0.6)';
+        ctx.beginPath();
+        ctx.moveTo(34, 0);
+        ctx.lineTo(44, -4);
+        ctx.lineTo(44, 4);
+        ctx.closePath();
+        ctx.fill();
 
         // Tail
         ctx.fillStyle = '#C62828';
         ctx.beginPath();
-        ctx.moveTo(-14, 4);
-        ctx.quadraticCurveTo(-28, 12, -32, 6);
-        ctx.quadraticCurveTo(-30, 2, -24, 6);
-        ctx.lineTo(-14, 2);
-        ctx.fill();
-
-        // Horns
-        ctx.fillStyle = '#5d4037';
-        ctx.beginPath();
-        ctx.moveTo(20, -14);
-        ctx.lineTo(18, -22);
-        ctx.lineTo(22, -14);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.moveTo(24, -14);
-        ctx.lineTo(26, -22);
-        ctx.lineTo(28, -14);
-        ctx.fill();
-
-        // Eye
-        ctx.fillStyle = '#ffeb3b';
-        ctx.beginPath();
-        ctx.arc(24, -11, 3, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#000';
-        ctx.beginPath();
-        ctx.arc(24, -11, 1.5, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Fire breath effect
-        ctx.fillStyle = `rgba(255, 87, 34, ${0.3 + Math.sin(time * 8) * 0.2})`;
-        ctx.beginPath();
-        ctx.moveTo(34, -8);
-        ctx.quadraticCurveTo(44, -8, 48, -6);
-        ctx.quadraticCurveTo(44, -4, 34, -6);
+        ctx.moveTo(-14, 6);
+        ctx.quadraticCurveTo(-26, 12, -30, 6);
+        ctx.quadraticCurveTo(-34, 2, -36, 6);
+        ctx.lineTo(-32, 2);
+        ctx.quadraticCurveTo(-28, 6, -14, 2);
         ctx.fill();
     },
 
-    // Giant - Mini-boss
-    drawGiant(ctx, enemy) {
-        // Massive body
-        ctx.fillStyle = '#4E342E';
+    // GIANT - Huge humanoid boss
+    drawGiant(ctx) {
+        // Legs
+        ctx.fillStyle = '#5D4037';
+        ctx.fillRect(-12, 12, 8, 14);
+        ctx.fillRect(4, 12, 8, 14);
+
+        // Body
+        ctx.fillStyle = '#6D4C41';
         ctx.beginPath();
-        ctx.ellipse(0, 4, 14, 18, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, 4, 16, 14, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Loincloth
+        ctx.fillStyle = '#3E2723';
+        ctx.beginPath();
+        ctx.moveTo(-14, 8);
+        ctx.lineTo(-10, 18);
+        ctx.lineTo(10, 18);
+        ctx.lineTo(14, 8);
+        ctx.closePath();
         ctx.fill();
 
         // Head
+        ctx.fillStyle = '#795548';
+        ctx.beginPath();
+        ctx.arc(0, -16, 12, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Brow ridge
         ctx.fillStyle = '#5D4037';
         ctx.beginPath();
-        ctx.arc(0, -16, 10, 0, Math.PI * 2);
+        ctx.ellipse(0, -20, 12, 4, 0, 0, Math.PI);
         ctx.fill();
 
-        // Beard
+        // Eyes (small, angry)
+        ctx.fillStyle = '#FFEB3B';
+        ctx.beginPath();
+        ctx.arc(-5, -16, 2, 0, Math.PI * 2);
+        ctx.arc(5, -16, 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Arms
+        ctx.fillStyle = '#6D4C41';
+        ctx.beginPath();
+        ctx.ellipse(-22, 0, 8, 14, 0.3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(22, 0, 8, 14, -0.3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Club in hand
+        ctx.fillStyle = '#4E342E';
+        ctx.save();
+        ctx.translate(28, 0);
+        ctx.rotate(-0.4);
+        ctx.fillRect(-4, -30, 8, 40);
         ctx.fillStyle = '#3E2723';
         ctx.beginPath();
-        ctx.moveTo(-8, -10);
-        ctx.quadraticCurveTo(0, 2, 8, -10);
-        ctx.quadraticCurveTo(0, -4, -8, -10);
+        ctx.ellipse(0, -32, 10, 12, 0, 0, Math.PI * 2);
         ctx.fill();
-
-        // Eyes
-        ctx.fillStyle = '#fff';
-        ctx.beginPath();
-        ctx.arc(-4, -18, 3, 0, Math.PI * 2);
-        ctx.arc(4, -18, 3, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#000';
-        ctx.beginPath();
-        ctx.arc(-4, -18, 1.5, 0, Math.PI * 2);
-        ctx.arc(4, -18, 1.5, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Club
-        ctx.fillStyle = '#5d4037';
-        ctx.fillRect(16, -10, 6, 28);
-        ctx.fillStyle = '#4e342e';
-        ctx.beginPath();
-        ctx.ellipse(19, -12, 8, 6, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Boss aura
-        ctx.strokeStyle = 'rgba(255, 152, 0, 0.3)';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.arc(0, 0, 24, 0, Math.PI * 2);
-        ctx.stroke();
+        ctx.restore();
     },
 
-    // Demon Knight - Boss enemy
-    drawDemonKnight(ctx, enemy) {
-        // Dark armor body
+    // DEMON_KNIGHT - Armored demon warrior
+    drawDemonKnight(ctx) {
+        // Armor body
         ctx.fillStyle = '#B71C1C';
         ctx.beginPath();
-        ctx.ellipse(0, 2, 12, 14, 0, 0, Math.PI * 2);
+        ctx.moveTo(-10, -4);
+        ctx.lineTo(-12, 14);
+        ctx.lineTo(12, 14);
+        ctx.lineTo(10, -4);
+        ctx.closePath();
         ctx.fill();
 
         // Armor plates
         ctx.fillStyle = '#7f0000';
-        ctx.fillRect(-10, -6, 20, 16);
-        ctx.strokeStyle = '#4a0000';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(-10, -6, 20, 16);
+        ctx.fillRect(-8, 0, 16, 4);
+        ctx.fillRect(-8, 6, 16, 4);
 
-        // Horned helmet
-        ctx.fillStyle = '#212121';
+        // Shoulder pads
+        ctx.fillStyle = '#B71C1C';
+        ctx.beginPath();
+        ctx.ellipse(-14, -2, 6, 4, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(14, -2, 6, 4, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Helmet
+        ctx.fillStyle = '#880E4F';
         ctx.beginPath();
         ctx.arc(0, -12, 10, 0, Math.PI * 2);
         ctx.fill();
 
         // Horns
-        ctx.fillStyle = '#424242';
+        ctx.fillStyle = '#4A0000';
         ctx.beginPath();
         ctx.moveTo(-8, -16);
         ctx.lineTo(-14, -28);
@@ -2037,387 +1945,324 @@ const TowerDefenseRenderer = {
         ctx.fill();
 
         // Glowing eyes
-        ctx.fillStyle = '#ff1744';
+        ctx.fillStyle = '#FF5722';
         ctx.beginPath();
-        ctx.arc(-4, -12, 3, 0, Math.PI * 2);
-        ctx.arc(4, -12, 3, 0, Math.PI * 2);
+        ctx.arc(-4, -12, 2, 0, Math.PI * 2);
+        ctx.arc(4, -12, 2, 0, Math.PI * 2);
         ctx.fill();
 
         // Flaming sword
-        ctx.fillStyle = '#ff5722';
-        ctx.fillRect(14, -20, 4, 30);
-        ctx.fillStyle = '#ff9800';
+        ctx.fillStyle = '#424242';
+        ctx.fillRect(16, -20, 3, 30);
+        // Blade
+        ctx.fillStyle = '#F44336';
         ctx.beginPath();
-        ctx.moveTo(14, -20);
-        ctx.lineTo(16, -28);
-        ctx.lineTo(18, -20);
+        ctx.moveTo(17.5, -20);
+        ctx.lineTo(14, -34);
+        ctx.lineTo(21, -34);
+        ctx.closePath();
         ctx.fill();
-
-        // Boss aura
-        ctx.strokeStyle = 'rgba(244, 67, 54, 0.4)';
-        ctx.lineWidth = 4;
+        // Fire effect
+        ctx.fillStyle = 'rgba(255, 152, 0, 0.7)';
         ctx.beginPath();
-        ctx.arc(0, 0, 22, 0, Math.PI * 2);
-        ctx.stroke();
+        ctx.moveTo(17.5, -34);
+        ctx.quadraticCurveTo(12, -40, 17.5, -44);
+        ctx.quadraticCurveTo(23, -40, 17.5, -34);
+        ctx.fill();
     },
 
-    // Demon King - Final boss
-    drawDemonKing(ctx, enemy, time) {
-        const pulse = Math.sin(time * 2) * 0.2 + 0.8;
-
-        // Flame aura
-        ctx.fillStyle = `rgba(255, 87, 34, ${0.2 * pulse})`;
+    // DEMON_KING - Final boss, massive demon
+    drawDemonKing(ctx) {
+        // Aura
+        ctx.fillStyle = 'rgba(136, 14, 79, 0.3)';
         ctx.beginPath();
-        ctx.arc(0, 0, 32, 0, Math.PI * 2);
+        ctx.arc(0, 0, 36, 0, Math.PI * 2);
         ctx.fill();
 
-        // Massive body
+        // Wings
+        ctx.fillStyle = '#4A0000';
+        // Left wing
+        ctx.beginPath();
+        ctx.moveTo(-12, -8);
+        ctx.lineTo(-40, -30);
+        ctx.lineTo(-46, -10);
+        ctx.lineTo(-40, 6);
+        ctx.lineTo(-12, 8);
+        ctx.fill();
+        // Right wing
+        ctx.beginPath();
+        ctx.moveTo(12, -8);
+        ctx.lineTo(40, -30);
+        ctx.lineTo(46, -10);
+        ctx.lineTo(40, 6);
+        ctx.lineTo(12, 8);
+        ctx.fill();
+
+        // Body
         ctx.fillStyle = '#880E4F';
         ctx.beginPath();
-        ctx.ellipse(0, 4, 18, 22, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, 6, 18, 20, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        // Armor
-        ctx.fillStyle = '#4a0000';
-        ctx.fillRect(-14, -8, 28, 24);
-        ctx.strokeStyle = '#ffd700';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(-14, -8, 28, 24);
-
-        // Skull emblem
-        ctx.fillStyle = '#e0e0e0';
+        // Armor/chest detail
+        ctx.fillStyle = '#6a0038';
         ctx.beginPath();
-        ctx.arc(0, 4, 6, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#4a0000';
-        ctx.beginPath();
-        ctx.arc(-2, 3, 2, 0, Math.PI * 2);
-        ctx.arc(2, 3, 2, 0, Math.PI * 2);
+        ctx.moveTo(0, -10);
+        ctx.lineTo(-12, 6);
+        ctx.lineTo(0, 22);
+        ctx.lineTo(12, 6);
+        ctx.closePath();
         ctx.fill();
 
         // Head
-        ctx.fillStyle = '#ad1457';
+        ctx.fillStyle = '#AD1457';
         ctx.beginPath();
         ctx.arc(0, -18, 14, 0, Math.PI * 2);
         ctx.fill();
 
         // Crown of horns
-        ctx.fillStyle = '#212121';
+        ctx.fillStyle = '#4A0000';
         for (let i = -2; i <= 2; i++) {
-            const hornX = i * 6;
-            const hornHeight = i === 0 ? 24 : 18;
+            const x = i * 6;
+            const height = i === 0 ? 24 : 18;
             ctx.beginPath();
-            ctx.moveTo(hornX - 3, -24);
-            ctx.lineTo(hornX, -24 - hornHeight);
-            ctx.lineTo(hornX + 3, -24);
+            ctx.moveTo(x - 3, -28);
+            ctx.lineTo(x, -28 - height);
+            ctx.lineTo(x + 3, -28);
+            ctx.closePath();
             ctx.fill();
         }
 
-        // Burning eyes
-        ctx.fillStyle = '#ff1744';
+        // Glowing eyes
+        ctx.fillStyle = '#FF1744';
         ctx.beginPath();
-        ctx.arc(-5, -18, 4, 0, Math.PI * 2);
-        ctx.arc(5, -18, 4, 0, Math.PI * 2);
+        ctx.arc(-5, -18, 3, 0, Math.PI * 2);
+        ctx.arc(5, -18, 3, 0, Math.PI * 2);
         ctx.fill();
-
         // Eye glow
-        ctx.fillStyle = '#ffeb3b';
+        ctx.fillStyle = 'rgba(255, 23, 68, 0.5)';
         ctx.beginPath();
-        ctx.arc(-5, -19, 2, 0, Math.PI * 2);
-        ctx.arc(5, -19, 2, 0, Math.PI * 2);
+        ctx.arc(-5, -18, 6, 0, Math.PI * 2);
+        ctx.arc(5, -18, 6, 0, Math.PI * 2);
         ctx.fill();
 
-        // Flaming cape
-        ctx.fillStyle = `rgba(255, 87, 34, ${0.6 + Math.sin(time * 4) * 0.2})`;
-        for (let i = 0; i < 5; i++) {
-            const flameOffset = Math.sin(time * 6 + i) * 4;
-            ctx.beginPath();
-            ctx.moveTo(-16 + i * 8, 16);
-            ctx.quadraticCurveTo(-16 + i * 8, 30 + flameOffset, -12 + i * 8, 36);
-            ctx.quadraticCurveTo(-8 + i * 8, 30 + flameOffset, -8 + i * 8, 16);
-            ctx.fill();
-        }
-
-        // Boss crown glow
-        ctx.strokeStyle = `rgba(255, 215, 0, ${0.5 * pulse})`;
-        ctx.lineWidth = 4;
+        // Arms
+        ctx.fillStyle = '#AD1457';
         ctx.beginPath();
-        ctx.arc(0, -18, 18, 0, Math.PI * 2);
-        ctx.stroke();
+        ctx.ellipse(-24, 4, 8, 16, 0.3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(24, 4, 8, 16, -0.3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Claws
+        ctx.fillStyle = '#4A0000';
+        // Left hand claws
+        ctx.beginPath();
+        ctx.moveTo(-28, 18);
+        ctx.lineTo(-32, 28);
+        ctx.lineTo(-26, 20);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(-24, 20);
+        ctx.lineTo(-24, 30);
+        ctx.lineTo(-20, 22);
+        ctx.fill();
+        // Right hand claws
+        ctx.beginPath();
+        ctx.moveTo(28, 18);
+        ctx.lineTo(32, 28);
+        ctx.lineTo(26, 20);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(24, 20);
+        ctx.lineTo(24, 30);
+        ctx.lineTo(20, 22);
+        ctx.fill();
     },
 
-    // Default enemy fallback
-    drawDefaultEnemy(ctx, enemy) {
-        const color = this.ENEMY_COLORS[enemy.type] || '#888';
-        ctx.fillStyle = color;
-        ctx.beginPath();
-        ctx.arc(0, 0, 10, 0, Math.PI * 2);
-        ctx.fill();
+    getEnemySize(type) {
+        const sizes = {
+            goblin: 10,
+            orc: 12,
+            orc_brute: 16,
+            wolf_rider: 16,
+            troll: 18,
+            dark_mage: 12,
+            bat: 12,
+            wyvern: 16,
+            golem: 20,
+            assassin: 10,
+            necromancer: 14,
+            dragon: 28,
+            giant: 28,
+            demon_knight: 18,
+            demon_king: 36
+        };
+        return sizes[type] || 12;
     },
 
     renderProjectiles() {
         const ctx = this.ctx;
-        const time = Date.now() / 1000;
 
         for (const proj of this.state.projectiles) {
             ctx.save();
             ctx.translate(proj.x, proj.y);
 
-            // Calculate rotation based on velocity (if available)
-            // For now, use the direction to target
-            const target = this.state.enemies.find(e => e.id === proj.targetId);
-            if (target) {
-                const angle = Math.atan2(target.y - proj.y, target.x - proj.x);
-                ctx.rotate(angle);
-            }
-
-            // Draw based on projectile type (0=arrow, 1=cannonball, 2=magic, 3=ice, 4=poison, 5=lightning)
             switch (proj.type) {
-                case 0: this.drawArrowProjectile(ctx); break;
-                case 1: this.drawCannonballProjectile(ctx); break;
-                case 2: this.drawMagicBoltProjectile(ctx, time); break;
-                case 3: this.drawIceShardProjectile(ctx); break;
-                case 4: this.drawPoisonDartProjectile(ctx); break;
-                case 5: this.drawLightningBoltProjectile(ctx, time); break;
-                default: this.drawDefaultProjectile(ctx); break;
+                case 0: // Arrow
+                    ctx.fillStyle = '#8d6e63';
+                    ctx.fillRect(-6, -1, 12, 2);
+                    break;
+                case 1: // Cannonball
+                    ctx.fillStyle = '#424242';
+                    ctx.beginPath();
+                    ctx.arc(0, 0, 5, 0, Math.PI * 2);
+                    ctx.fill();
+                    break;
+                case 2: // Magic bolt
+                    ctx.fillStyle = '#e1bee7';
+                    ctx.beginPath();
+                    ctx.arc(0, 0, 4, 0, Math.PI * 2);
+                    ctx.fill();
+                    break;
+                case 3: // Ice shard
+                    ctx.fillStyle = '#4fc3f7';
+                    ctx.beginPath();
+                    ctx.moveTo(0, -6);
+                    ctx.lineTo(3, 0);
+                    ctx.lineTo(0, 6);
+                    ctx.lineTo(-3, 0);
+                    ctx.closePath();
+                    ctx.fill();
+                    break;
+                case 4: // Poison dart
+                    ctx.fillStyle = '#8bc34a';
+                    ctx.fillRect(-4, -1, 8, 2);
+                    break;
+                case 5: // Lightning
+                    ctx.strokeStyle = '#ffeb3b';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(-4, 0);
+                    ctx.lineTo(4, 0);
+                    ctx.stroke();
+                    break;
+                case 6: // Fire arrow
+                    ctx.fillStyle = '#ff5722';
+                    ctx.fillRect(-6, -1, 12, 2);
+                    ctx.fillStyle = '#ff9800';
+                    ctx.beginPath();
+                    ctx.arc(4, 0, 3, 0, Math.PI * 2);
+                    ctx.fill();
+                    break;
+                case 7: // Ice arrow
+                    ctx.fillStyle = '#4fc3f7';
+                    ctx.fillRect(-6, -1, 12, 2);
+                    break;
             }
 
             ctx.restore();
         }
     },
 
-    // Arrow projectile
-    drawArrowProjectile(ctx) {
-        // Shaft
-        ctx.fillStyle = '#8d6e63';
-        ctx.fillRect(-8, -1.5, 14, 3);
+    renderSoldiers() {
+        if (!this.state.soldiers || this.state.soldiers.length === 0) return;
 
-        // Arrowhead
-        ctx.fillStyle = '#9e9e9e';
-        ctx.beginPath();
-        ctx.moveTo(6, -3);
-        ctx.lineTo(12, 0);
-        ctx.lineTo(6, 3);
-        ctx.closePath();
-        ctx.fill();
+        const ctx = this.ctx;
 
-        // Fletching
-        ctx.fillStyle = '#f44336';
-        ctx.beginPath();
-        ctx.moveTo(-8, -1);
-        ctx.lineTo(-12, -4);
-        ctx.lineTo(-8, 0);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.moveTo(-8, 1);
-        ctx.lineTo(-12, 4);
-        ctx.lineTo(-8, 0);
-        ctx.fill();
-    },
+        for (const soldier of this.state.soldiers) {
+            const x = soldier.x;
+            const y = soldier.y;
 
-    // Cannonball projectile
-    drawCannonballProjectile(ctx) {
-        // Shadow
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-        ctx.beginPath();
-        ctx.ellipse(2, 2, 8, 4, 0, 0, Math.PI * 2);
-        ctx.fill();
+            // Health bar
+            ctx.fillStyle = '#333';
+            ctx.fillRect(x - 8, y - 18, 16, 3);
+            const hpPercent = soldier.hp / soldier.maxHp;
+            ctx.fillStyle = hpPercent > 0.5 ? '#2196F3' : '#ff9800';
+            ctx.fillRect(x - 8, y - 18, 16 * hpPercent, 3);
 
-        // Ball
-        ctx.fillStyle = '#424242';
-        ctx.beginPath();
-        ctx.arc(0, 0, 7, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Highlight
-        ctx.fillStyle = '#616161';
-        ctx.beginPath();
-        ctx.arc(-2, -2, 3, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Smoke trail
-        ctx.fillStyle = 'rgba(100, 100, 100, 0.4)';
-        for (let i = 0; i < 3; i++) {
+            // Soldier body
+            ctx.fillStyle = '#3949ab';
             ctx.beginPath();
-            ctx.arc(-10 - i * 6, (Math.random() - 0.5) * 4, 3 + i, 0, Math.PI * 2);
+            ctx.arc(x, y, 8, 0, Math.PI * 2);
             ctx.fill();
-        }
-    },
 
-    // Magic bolt projectile
-    drawMagicBoltProjectile(ctx, time) {
-        const pulse = Math.sin(time * 10) * 0.3 + 0.7;
-
-        // Outer glow
-        ctx.fillStyle = `rgba(156, 39, 176, ${0.3 * pulse})`;
-        ctx.beginPath();
-        ctx.arc(0, 0, 12, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Inner glow
-        ctx.fillStyle = `rgba(186, 104, 200, ${0.5 * pulse})`;
-        ctx.beginPath();
-        ctx.arc(0, 0, 8, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Core
-        ctx.fillStyle = '#e1bee7';
-        ctx.beginPath();
-        ctx.arc(0, 0, 4, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Sparkles
-        ctx.fillStyle = '#fff';
-        for (let i = 0; i < 4; i++) {
-            const angle = time * 8 + i * Math.PI / 2;
-            const dist = 6 + Math.sin(time * 12 + i) * 2;
+            // Helmet
+            ctx.fillStyle = '#5c6bc0';
             ctx.beginPath();
-            ctx.arc(Math.cos(angle) * dist, Math.sin(angle) * dist, 1.5, 0, Math.PI * 2);
+            ctx.arc(x, y - 4, 5, Math.PI, 0);
             ctx.fill();
+
+            // Shield
+            ctx.fillStyle = '#1565c0';
+            ctx.fillRect(x - 10, y - 4, 4, 10);
+
+            // Sword animation when engaged
+            if (soldier.engaged) {
+                const time = Date.now() / 100;
+                const swingAngle = Math.sin(time) * 0.5;
+                ctx.save();
+                ctx.translate(x + 6, y);
+                ctx.rotate(swingAngle);
+                ctx.fillStyle = '#9e9e9e';
+                ctx.fillRect(-1, -12, 2, 12);
+                ctx.restore();
+            }
         }
-    },
-
-    // Ice shard projectile
-    drawIceShardProjectile(ctx) {
-        // Main crystal
-        ctx.fillStyle = '#b3e5fc';
-        ctx.beginPath();
-        ctx.moveTo(10, 0);
-        ctx.lineTo(2, -4);
-        ctx.lineTo(-8, 0);
-        ctx.lineTo(2, 4);
-        ctx.closePath();
-        ctx.fill();
-
-        // Crystal shine
-        ctx.fillStyle = '#e1f5fe';
-        ctx.beginPath();
-        ctx.moveTo(6, -1);
-        ctx.lineTo(2, -2);
-        ctx.lineTo(-2, -1);
-        ctx.lineTo(2, 0);
-        ctx.closePath();
-        ctx.fill();
-
-        // Ice trail
-        ctx.fillStyle = 'rgba(179, 229, 252, 0.5)';
-        ctx.beginPath();
-        ctx.arc(-12, 0, 3, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = 'rgba(179, 229, 252, 0.3)';
-        ctx.beginPath();
-        ctx.arc(-18, 0, 2, 0, Math.PI * 2);
-        ctx.fill();
-    },
-
-    // Poison dart projectile
-    drawPoisonDartProjectile(ctx) {
-        // Dart body
-        ctx.fillStyle = '#558b2f';
-        ctx.fillRect(-6, -2, 10, 4);
-
-        // Dart tip
-        ctx.fillStyle = '#33691e';
-        ctx.beginPath();
-        ctx.moveTo(4, -3);
-        ctx.lineTo(10, 0);
-        ctx.lineTo(4, 3);
-        ctx.closePath();
-        ctx.fill();
-
-        // Poison drip
-        ctx.fillStyle = '#8bc34a';
-        ctx.beginPath();
-        ctx.arc(8, 2, 2, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Poison trail
-        ctx.fillStyle = 'rgba(139, 195, 74, 0.4)';
-        for (let i = 0; i < 3; i++) {
-            ctx.beginPath();
-            ctx.arc(-8 - i * 5, Math.sin(i * 2) * 3, 2, 0, Math.PI * 2);
-            ctx.fill();
-        }
-    },
-
-    // Lightning bolt projectile
-    drawLightningBoltProjectile(ctx, time) {
-        const jitter = Math.sin(time * 30) * 2;
-
-        // Electric glow
-        ctx.fillStyle = 'rgba(255, 235, 59, 0.4)';
-        ctx.beginPath();
-        ctx.arc(0, 0, 10, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Lightning bolt shape
-        ctx.strokeStyle = '#ffeb3b';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(-10, jitter);
-        ctx.lineTo(-4, -3 + jitter);
-        ctx.lineTo(0, 2 + jitter);
-        ctx.lineTo(6, -2 + jitter);
-        ctx.lineTo(10, jitter);
-        ctx.stroke();
-
-        // Core glow
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(-10, jitter);
-        ctx.lineTo(-4, -3 + jitter);
-        ctx.lineTo(0, 2 + jitter);
-        ctx.lineTo(6, -2 + jitter);
-        ctx.lineTo(10, jitter);
-        ctx.stroke();
-
-        // Sparks
-        ctx.fillStyle = '#fff';
-        for (let i = 0; i < 3; i++) {
-            const sparkX = (Math.random() - 0.5) * 16;
-            const sparkY = (Math.random() - 0.5) * 8;
-            ctx.beginPath();
-            ctx.arc(sparkX, sparkY, 1, 0, Math.PI * 2);
-            ctx.fill();
-        }
-    },
-
-    // Default projectile fallback
-    drawDefaultProjectile(ctx) {
-        ctx.fillStyle = '#fff';
-        ctx.beginPath();
-        ctx.arc(0, 0, 4, 0, Math.PI * 2);
-        ctx.fill();
     },
 
     renderHoverPreview() {
         if (!this.hoveredCell || this.selectedTower) return;
+        if (!this.selectedTowerType) return;
 
         const ctx = this.ctx;
         const cellSize = this.config.cellSize;
         const x = this.hoveredCell.x * cellSize;
         const y = this.hoveredCell.y * cellSize;
+        const centerX = x + cellSize / 2;
+        const centerY = y + cellSize / 2;
 
         const canPlace = this.canPlaceTower(this.hoveredCell.x, this.hoveredCell.y);
+        const range = this.TOWER_RANGES[this.selectedTowerType] || 100;
 
-        // Preview overlay
+        // Range preview
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, range, 0, Math.PI * 2);
+        ctx.fillStyle = canPlace ? 'rgba(76, 175, 80, 0.12)' : 'rgba(244, 67, 54, 0.12)';
+        ctx.fill();
+        ctx.strokeStyle = canPlace ? 'rgba(76, 175, 80, 0.5)' : 'rgba(244, 67, 54, 0.5)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([8, 4]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Cell highlight
         ctx.fillStyle = canPlace ? 'rgba(76, 175, 80, 0.3)' : 'rgba(244, 67, 54, 0.3)';
         ctx.fillRect(x, y, cellSize, cellSize);
-
         ctx.strokeStyle = canPlace ? '#4CAF50' : '#f44336';
         ctx.lineWidth = 2;
         ctx.strokeRect(x, y, cellSize, cellSize);
 
-        // Tower preview
+        // Tower preview sprite
         if (canPlace) {
-            const centerX = x + cellSize / 2;
-            const centerY = y + cellSize / 2;
             ctx.globalAlpha = 0.6;
-            ctx.fillStyle = this.TOWER_COLORS[this.selectedTowerType];
-            ctx.beginPath();
-            ctx.arc(centerX, centerY, 15, 0, Math.PI * 2);
-            ctx.fill();
+            ctx.save();
+            ctx.translate(centerX, centerY);
+
+            const mockTower = { type: this.selectedTowerType, upgrades: { pathA: 0, pathB: 0 } };
+            switch (this.selectedTowerType) {
+                case 'archer': this.drawArcherTower(ctx, mockTower); break;
+                case 'cannon': this.drawCannonTower(ctx, mockTower); break;
+                case 'mage': this.drawMageTower(ctx, mockTower); break;
+                case 'frost': this.drawFrostTower(ctx, mockTower); break;
+                case 'poison': this.drawPoisonTower(ctx, mockTower); break;
+                case 'lightning': this.drawLightningTower(ctx, mockTower); break;
+                case 'barracks': this.drawBarracksTower(ctx, mockTower); break;
+                case 'ultimate': this.drawUltimateTower(ctx, mockTower); break;
+            }
+
+            ctx.restore();
             ctx.globalAlpha = 1;
         }
     },
@@ -2425,21 +2270,19 @@ const TowerDefenseRenderer = {
     renderUI() {
         const ctx = this.ctx;
         const panelX = 960;
-        const time = Date.now() / 1000;
 
-        // UI Panel background with gradient
+        // Panel background
         const gradient = ctx.createLinearGradient(panelX, 0, panelX + 240, 0);
         gradient.addColorStop(0, '#1a1f2e');
         gradient.addColorStop(1, '#161b22');
         ctx.fillStyle = gradient;
         ctx.fillRect(panelX, 0, 240, 720);
 
-        // Panel border with glow
         ctx.strokeStyle = '#30363d';
         ctx.lineWidth = 2;
         ctx.strokeRect(panelX, 0, 240, 720);
 
-        // Title with crown decoration
+        // Title
         ctx.fillStyle = '#ffd700';
         ctx.font = 'bold 10px sans-serif';
         ctx.textAlign = 'center';
@@ -2449,352 +2292,331 @@ const TowerDefenseRenderer = {
         ctx.font = 'bold 20px sans-serif';
         ctx.fillText('Tower Defense', panelX + 120, 38);
 
-        // Divider line
-        ctx.strokeStyle = '#30363d';
-        ctx.beginPath();
-        ctx.moveTo(panelX + 20, 50);
-        ctx.lineTo(panelX + 220, 50);
-        ctx.stroke();
-
-        // Stats section with icons
+        // Stats
         ctx.textAlign = 'left';
 
-        // Gold with coin icon
-        this.drawStatBox(ctx, panelX + 10, 58, 105, 35, '#ffd700', '💰', this.state.gold.toLocaleString());
+        // Gold
+        ctx.fillStyle = '#21262d';
+        ctx.fillRect(panelX + 10, 58, 105, 35);
+        ctx.fillStyle = '#ffd700';
+        ctx.font = 'bold 14px sans-serif';
+        ctx.fillText('💰 ' + this.state.gold.toLocaleString(), panelX + 18, 82);
 
-        // Lives with heart icon
-        this.drawStatBox(ctx, panelX + 125, 58, 105, 35, '#f44336', '❤️', this.state.lives.toString());
+        // Lives
+        ctx.fillStyle = '#21262d';
+        ctx.fillRect(panelX + 125, 58, 105, 35);
+        ctx.fillStyle = '#f44336';
+        ctx.fillText('❤️ ' + this.state.lives, panelX + 133, 82);
 
-        // Wave progress bar
+        // Wave
         ctx.fillStyle = '#21262d';
         ctx.fillRect(panelX + 10, 100, 220, 25);
-        const waveProgress = this.state.wave / this.state.maxWaves;
-        const waveGradient = ctx.createLinearGradient(panelX + 10, 0, panelX + 230, 0);
-        waveGradient.addColorStop(0, '#4CAF50');
-        waveGradient.addColorStop(1, '#8BC34A');
-        ctx.fillStyle = waveGradient;
-        ctx.fillRect(panelX + 10, 100, 220 * waveProgress, 25);
-        ctx.strokeStyle = '#30363d';
-        ctx.strokeRect(panelX + 10, 100, 220, 25);
-
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 12px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText(`Wave ${this.state.wave} / ${this.state.maxWaves}`, panelX + 120, 117);
-
-        // Score with animation
-        ctx.font = '11px sans-serif';
         ctx.fillStyle = '#8b949e';
-        ctx.fillText(`Score: ${this.state.score.toLocaleString()}`, panelX + 120, 138);
+        ctx.font = '12px sans-serif';
+        ctx.fillText(`Wave ${this.state.wave}/${this.state.maxWaves}`, panelX + 18, 118);
 
-        // Fast forward indicator
-        if (this.state.fastForward) {
-            ctx.fillStyle = '#FF9800';
-            ctx.font = 'bold 12px sans-serif';
-            ctx.fillText('⚡ 2x SPEED ⚡', panelX + 120, 155);
-        }
+        // Score
+        ctx.fillStyle = '#58a6ff';
+        ctx.textAlign = 'right';
+        ctx.fillText(`Score: ${this.state.score}`, panelX + 222, 118);
 
-        // Tower selection header
+        // Tower selection
+        ctx.textAlign = 'center';
         ctx.fillStyle = '#f0f6fc';
         ctx.font = 'bold 14px sans-serif';
-        ctx.textAlign = 'left';
-        ctx.fillText('🏰 Select Tower (1-8)', panelX + 15, 175);
+        ctx.fillText('SELECT TOWER', panelX + 120, 155);
+        ctx.fillStyle = '#8b949e';
+        ctx.font = '10px sans-serif';
+        ctx.fillText('(Keys 1-8)', panelX + 120, 170);
 
-        // Tower buttons with improved styling
-        const towerTypes = ['archer', 'cannon', 'mage', 'frost', 'poison', 'lightning', 'barracks', 'ultimate'];
-        const towerEmojis = ['🏹', '💣', '🔮', '❄️', '☠️', '⚡', '⚔️', '👑'];
-        const buttonHeight = 42;
+        // Tower buttons
+        const towers = [
+            { type: 'archer', name: 'Archer', icon: '🏹' },
+            { type: 'cannon', name: 'Cannon', icon: '💣' },
+            { type: 'mage', name: 'Mage', icon: '🔮' },
+            { type: 'frost', name: 'Frost', icon: '❄️' },
+            { type: 'poison', name: 'Poison', icon: '☠️' },
+            { type: 'lightning', name: 'Lightning', icon: '⚡' },
+            { type: 'barracks', name: 'Barracks', icon: '⚔️' },
+            { type: 'ultimate', name: 'Ultimate', icon: '👑' }
+        ];
+
         const startY = 185;
-
-        for (let i = 0; i < towerTypes.length; i++) {
-            const type = towerTypes[i];
-            const btnY = startY + i * (buttonHeight + 4);
-            const isSelected = this.selectedTowerType === type;
-            const cost = this.TOWER_COSTS[type];
+        for (let i = 0; i < towers.length; i++) {
+            const t = towers[i];
+            const btnY = startY + i * 42;
+            const isSelected = this.selectedTowerType === t.type;
+            const cost = this.TOWER_COSTS[t.type];
             const canAfford = this.state.gold >= cost;
-            const isLocked = type === 'ultimate' && this.state.wave < 40;
 
-            // Button background with hover effect
-            if (isSelected) {
-                ctx.fillStyle = '#2d333b';
-            } else {
-                ctx.fillStyle = '#21262d';
-            }
-            ctx.beginPath();
-            ctx.roundRect(panelX + 10, btnY, 220, buttonHeight, 6);
-            ctx.fill();
+            // Button background
+            ctx.fillStyle = isSelected ? '#238636' : (canAfford ? '#21262d' : '#161b22');
+            ctx.fillRect(panelX + 10, btnY, 220, 40);
 
-            // Selection border
             if (isSelected) {
-                ctx.strokeStyle = this.TOWER_COLORS[type];
+                ctx.strokeStyle = '#3fb950';
                 ctx.lineWidth = 2;
-                ctx.stroke();
-
-                // Glow effect
-                ctx.shadowColor = this.TOWER_COLORS[type];
-                ctx.shadowBlur = 8;
-                ctx.stroke();
-                ctx.shadowBlur = 0;
+                ctx.strokeRect(panelX + 10, btnY, 220, 40);
             }
 
-            // Tower emoji icon
-            ctx.font = '18px sans-serif';
+            // Icon and name
+            ctx.fillStyle = canAfford ? '#f0f6fc' : '#484f58';
+            ctx.font = '16px sans-serif';
             ctx.textAlign = 'left';
-            ctx.fillStyle = isLocked ? '#555' : '#fff';
-            ctx.fillText(towerEmojis[i], panelX + 18, btnY + 28);
+            ctx.fillText(t.icon, panelX + 18, btnY + 26);
 
-            // Tower color indicator
-            ctx.fillStyle = isLocked ? '#555' : this.TOWER_COLORS[type];
-            ctx.beginPath();
-            ctx.arc(panelX + 52, btnY + 21, 6, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Tower name
-            ctx.fillStyle = isLocked ? '#555' : canAfford ? '#f0f6fc' : '#888';
             ctx.font = 'bold 12px sans-serif';
-            ctx.fillText(type.charAt(0).toUpperCase() + type.slice(1), panelX + 65, btnY + 18);
+            ctx.fillText(t.name, panelX + 42, btnY + 22);
 
-            // Cost with coin
-            ctx.fillStyle = isLocked ? '#555' : canAfford ? '#ffd700' : '#f44336';
-            ctx.font = '11px sans-serif';
-            ctx.fillText(isLocked ? '🔒 Wave 40' : `💰 ${cost}`, panelX + 65, btnY + 34);
-
-            // Keybind hint
-            ctx.fillStyle = '#6e7681';
+            // Cost
+            ctx.fillStyle = canAfford ? '#ffd700' : '#484f58';
             ctx.font = '10px sans-serif';
+            ctx.fillText(`${cost}g`, panelX + 42, btnY + 34);
+
+            // Hotkey
+            ctx.fillStyle = '#484f58';
             ctx.textAlign = 'right';
             ctx.fillText(`[${i + 1}]`, panelX + 222, btnY + 26);
-            ctx.textAlign = 'left';
         }
 
-        // Selected tower info panel
-        if (this.selectedTower) {
-            const infoY = 575;
-            ctx.fillStyle = '#2d333b';
-            ctx.beginPath();
-            ctx.roundRect(panelX + 10, infoY, 220, 75, 6);
-            ctx.fill();
-            ctx.strokeStyle = '#30363d';
-            ctx.stroke();
-
-            // Tower name and level with stars
-            const towerName = this.selectedTower.type.charAt(0).toUpperCase() + this.selectedTower.type.slice(1);
-            ctx.fillStyle = '#f0f6fc';
-            ctx.font = 'bold 13px sans-serif';
-            ctx.textAlign = 'left';
-            ctx.fillText(towerName, panelX + 20, infoY + 18);
-
-            // Level stars
-            ctx.fillStyle = '#ffd700';
-            const stars = '★'.repeat(this.selectedTower.level + 1) + '☆'.repeat(3 - this.selectedTower.level);
-            ctx.fillText(stars, panelX + 100, infoY + 18);
-
-            // Action buttons
-            // Upgrade button
-            if (this.selectedTower.level < 3) {
-                ctx.fillStyle = '#238636';
-                ctx.beginPath();
-                ctx.roundRect(panelX + 20, infoY + 28, 95, 32, 4);
-                ctx.fill();
-                ctx.fillStyle = '#fff';
-                ctx.font = 'bold 11px sans-serif';
-                ctx.textAlign = 'center';
-                ctx.fillText('⬆️ Upgrade', panelX + 67, infoY + 48);
-            }
-
-            // Sell button
-            ctx.fillStyle = '#da3633';
-            ctx.beginPath();
-            ctx.roundRect(panelX + 125, infoY + 28, 95, 32, 4);
-            ctx.fill();
-            ctx.fillStyle = '#fff';
-            ctx.fillText('💰 Sell', panelX + 172, infoY + 48);
-
-            // Targeting quick hint
-            ctx.fillStyle = '#8b949e';
-            ctx.font = '10px sans-serif';
-            ctx.textAlign = 'left';
-            ctx.fillText('Press S to sell, U to upgrade', panelX + 20, infoY + 70);
-        }
-
-        // Start wave button
-        const waveButtonY = 660;
-        if (!this.state.waveActive && this.state.wave <= this.state.maxWaves) {
-            // Pulsing glow effect
-            const pulse = Math.sin(time * 4) * 0.1 + 0.9;
-            ctx.shadowColor = '#4CAF50';
-            ctx.shadowBlur = 10 * pulse;
-
-            const buttonGradient = ctx.createLinearGradient(panelX + 10, waveButtonY, panelX + 10, waveButtonY + 50);
-            buttonGradient.addColorStop(0, '#2ea043');
-            buttonGradient.addColorStop(1, '#238636');
-            ctx.fillStyle = buttonGradient;
-            ctx.beginPath();
-            ctx.roundRect(panelX + 10, waveButtonY, 220, 50, 8);
-            ctx.fill();
-            ctx.shadowBlur = 0;
-
-            ctx.fillStyle = '#fff';
-            ctx.font = 'bold 16px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText('▶ Start Wave', panelX + 120, waveButtonY + 28);
-            ctx.font = '11px sans-serif';
-            ctx.fillStyle = 'rgba(255,255,255,0.7)';
-            ctx.fillText('Press SPACE', panelX + 120, waveButtonY + 44);
-        } else if (this.state.waveActive) {
-            ctx.fillStyle = '#21262d';
-            ctx.beginPath();
-            ctx.roundRect(panelX + 10, waveButtonY, 220, 50, 8);
-            ctx.fill();
-
-            // Animated loading dots
-            const dots = '.'.repeat(Math.floor(time * 3) % 4);
-            ctx.fillStyle = '#FF9800';
-            ctx.font = 'bold 16px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText(`⏳ Wave in Progress${dots}`, panelX + 120, waveButtonY + 32);
-        }
-
-        // Controls help at bottom
-        ctx.fillStyle = '#484f58';
-        ctx.font = '9px sans-serif';
+        // Controls
+        const ctrlY = 555;
         ctx.textAlign = 'center';
-        ctx.fillText('F: Speed | S: Sell | U: Upgrade | Right-click: Deselect', panelX + 120, 716);
-    },
-
-    // Helper to draw stat boxes
-    drawStatBox(ctx, x, y, w, h, color, icon, value) {
-        // Background
-        ctx.fillStyle = '#21262d';
-        ctx.beginPath();
-        ctx.roundRect(x, y, w, h, 4);
-        ctx.fill();
-
-        // Icon
-        ctx.font = '14px sans-serif';
-        ctx.textAlign = 'left';
-        ctx.fillText(icon, x + 8, y + 24);
-
-        // Value
-        ctx.fillStyle = color;
-        ctx.font = 'bold 14px sans-serif';
-        ctx.fillText(value, x + 32, y + 24);
-    },
-
-    renderEndScreen() {
-        const ctx = this.ctx;
-        const time = Date.now() / 1000;
-
-        // Dark overlay
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
-        ctx.fillRect(0, 0, 960, 720);
-
-        ctx.textAlign = 'center';
-
-        if (this.state.victory) {
-            // Victory celebration
-            // Golden particles
-            ctx.fillStyle = '#ffd700';
-            for (let i = 0; i < 20; i++) {
-                const px = 480 + Math.sin(time * 2 + i * 0.5) * 200;
-                const py = 200 + ((time * 50 + i * 30) % 400);
-                const size = 3 + Math.sin(time * 3 + i) * 2;
-                ctx.globalAlpha = 1 - py / 600;
-                ctx.beginPath();
-                ctx.arc(px, py, size, 0, Math.PI * 2);
-                ctx.fill();
-            }
-            ctx.globalAlpha = 1;
-
-            // Crown emoji
-            ctx.font = '60px sans-serif';
-            ctx.fillText('👑', 480, 220);
-
-            // Victory text with glow
-            ctx.shadowColor = '#4CAF50';
-            ctx.shadowBlur = 20;
-            ctx.fillStyle = '#4CAF50';
-            ctx.font = 'bold 56px sans-serif';
-            ctx.fillText('VICTORY!', 480, 300);
-            ctx.shadowBlur = 0;
-
-            ctx.fillStyle = '#81c784';
-            ctx.font = '24px sans-serif';
-            ctx.fillText('🏆 You defeated the Demon King! 🏆', 480, 360);
-
-        } else {
-            // Game over effects
-            // Falling embers
-            ctx.fillStyle = '#f44336';
-            for (let i = 0; i < 15; i++) {
-                const px = 480 + Math.sin(time + i * 0.7) * 180;
-                const py = 150 + ((time * 40 + i * 25) % 350);
-                ctx.globalAlpha = 0.5 - py / 800;
-                ctx.beginPath();
-                ctx.arc(px, py, 2, 0, Math.PI * 2);
-                ctx.fill();
-            }
-            ctx.globalAlpha = 1;
-
-            // Skull emoji
-            ctx.font = '60px sans-serif';
-            ctx.fillText('💀', 480, 220);
-
-            // Game over text with glow
-            ctx.shadowColor = '#f44336';
-            ctx.shadowBlur = 20;
-            ctx.fillStyle = '#f44336';
-            ctx.font = 'bold 56px sans-serif';
-            ctx.fillText('GAME OVER', 480, 300);
-            ctx.shadowBlur = 0;
-
-            ctx.fillStyle = '#ef9a9a';
-            ctx.font = '24px sans-serif';
-            ctx.fillText('The castle has fallen...', 480, 360);
-        }
-
-        // Stats box
-        ctx.fillStyle = 'rgba(33, 38, 45, 0.9)';
-        ctx.beginPath();
-        ctx.roundRect(330, 400, 300, 140, 12);
-        ctx.fill();
-        ctx.strokeStyle = '#30363d';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-
-        // Final stats
         ctx.fillStyle = '#f0f6fc';
         ctx.font = 'bold 14px sans-serif';
-        ctx.fillText('📊 FINAL STATS', 480, 430);
+        ctx.fillText('CONTROLS', panelX + 120, ctrlY);
 
-        ctx.font = '18px sans-serif';
-        ctx.fillStyle = '#ffd700';
-        ctx.fillText(`🏅 Score: ${this.state.score.toLocaleString()}`, 480, 465);
+        // Start Wave button
+        const canStart = !this.state.waveActive && !this.state.gameOver && !this.state.victory;
+        ctx.fillStyle = canStart ? '#238636' : '#21262d';
+        ctx.fillRect(panelX + 10, ctrlY + 15, 220, 35);
+        ctx.fillStyle = canStart ? '#f0f6fc' : '#484f58';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.fillText(this.state.waveActive ? 'Wave In Progress...' : 'START WAVE [Space]', panelX + 120, ctrlY + 38);
 
+        // Fast Forward button
+        ctx.fillStyle = this.state.fastForward ? '#1f6feb' : '#21262d';
+        ctx.fillRect(panelX + 10, ctrlY + 55, 220, 35);
+        ctx.fillStyle = '#f0f6fc';
+        ctx.fillText(this.state.fastForward ? '⏩ FAST (2x) [F]' : '▶️ NORMAL [F]', panelX + 120, ctrlY + 78);
+
+        // Tips
         ctx.fillStyle = '#8b949e';
-        ctx.font = '16px sans-serif';
-        ctx.fillText(`📋 Waves Completed: ${this.state.wave - 1} / ${this.state.maxWaves}`, 480, 495);
+        ctx.font = '10px sans-serif';
+        ctx.fillText('Click tower to see upgrades', panelX + 120, ctrlY + 110);
+        ctx.fillText('ESC to deselect', panelX + 120, ctrlY + 125);
+    },
 
-        // Towers built count
-        const towerCount = this.state.towers ? this.state.towers.length : 0;
-        ctx.fillText(`🏰 Towers Built: ${towerCount}`, 480, 520);
+    renderUpgradePopout() {
+        const ctx = this.ctx;
+        const tower = this.selectedTower;
+        if (!tower) return;
 
-        // Restart hint
-        ctx.fillStyle = '#6e7681';
-        ctx.font = '14px sans-serif';
-        ctx.fillText('Click "Restart Game" to play again', 480, 570);
+        const tree = this.UPGRADE_TREES[tower.type];
+        const ups = tower.upgrades;
+
+        const popoutY = 520;
+        const popoutHeight = 200;
+
+        // Background with slight transparency
+        ctx.fillStyle = 'rgba(22, 27, 34, 0.95)';
+        ctx.fillRect(0, popoutY, 960, popoutHeight);
+
+        // Border
+        ctx.strokeStyle = '#30363d';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(0, popoutY, 960, popoutHeight);
+
+        // Header
+        ctx.fillStyle = this.TOWER_COLORS[tower.type];
+        ctx.fillRect(0, popoutY, 960, 40);
+
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 16px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(`${tree.name} Tower [${ups.notation}]`, 15, popoutY + 26);
+
+        // Stats
+        ctx.font = '12px sans-serif';
+        ctx.fillText(`DMG: ${tower.damage}  |  Range: ${Math.round(tower.range)}  |  Speed: ${tower.attackSpeed.toFixed(1)}/s`, 200, popoutY + 26);
+
+        // Sell button
+        ctx.fillStyle = '#da3633';
+        ctx.fillRect(800, popoutY + 5, 90, 30);
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(`Sell +${tower.sellValue}g`, 845, popoutY + 25);
+
+        // Close button
+        ctx.fillStyle = '#484f58';
+        ctx.fillRect(900, popoutY + 5, 40, 30);
+        ctx.fillStyle = '#fff';
+        ctx.fillText('✕', 920, popoutY + 25);
+
+        // Path headers
+        ctx.textAlign = 'center';
+        ctx.font = 'bold 14px sans-serif';
+        ctx.fillStyle = '#58a6ff';
+        ctx.fillText(`Path A: ${tree.pathA.name}`, 110, popoutY + 55);
+        ctx.fillText(`Path B: ${tree.pathB.name}`, 350, popoutY + 55);
+
+        // Path A upgrades
+        this.renderUpgradePath(ctx, 20, popoutY + 60, tree.pathA, ups.pathA, ups.pathAChoice, ups.pathALocked, 'A');
+
+        // Path B upgrades
+        this.renderUpgradePath(ctx, 240, popoutY + 60, tree.pathB, ups.pathB, ups.pathBChoice, ups.pathBLocked, 'B');
+
+        // Tower preview with current upgrades
+        ctx.save();
+        ctx.translate(700, popoutY + 120);
+        ctx.scale(2, 2);
+        switch (tower.type) {
+            case 'archer': this.drawArcherTower(ctx, tower); break;
+            case 'cannon': this.drawCannonTower(ctx, tower); break;
+            case 'mage': this.drawMageTower(ctx, tower); break;
+            case 'frost': this.drawFrostTower(ctx, tower); break;
+            case 'poison': this.drawPoisonTower(ctx, tower); break;
+            case 'lightning': this.drawLightningTower(ctx, tower); break;
+            case 'barracks': this.drawBarracksTower(ctx, tower); break;
+            case 'ultimate': this.drawUltimateTower(ctx, tower); break;
+        }
+        ctx.restore();
+
+        // Instructions
+        ctx.fillStyle = '#8b949e';
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Click upgrade to purchase • Tier 3 locks other path at tier 2', 480, popoutY + 190);
+    },
+
+    renderUpgradePath(ctx, x, y, path, currentTier, tier3Choice, isLocked, pathLetter) {
+        const tierHeight = 32;
+
+        for (let t = 0; t < 4; t++) {
+            const tier = path.tiers[t];
+            const tierY = y + t * tierHeight;
+            const tierNum = (t < 2) ? t + 1 : 3;
+            const isChoice = t >= 2;
+            const choiceLetter = isChoice ? tier.choice : '';
+
+            // Determine state
+            let state = 'available';
+            if (isLocked && tierNum > 2) {
+                state = 'locked';
+            } else if (tierNum <= currentTier) {
+                state = 'purchased';
+            } else if (tierNum === currentTier + 1) {
+                if (isChoice) {
+                    if (currentTier < 2) state = 'unavailable';
+                    else if (tier3Choice !== '' && tier3Choice !== choiceLetter) state = 'unavailable';
+                    else state = this.state.gold >= tier.cost ? 'available' : 'cantafford';
+                } else {
+                    state = this.state.gold >= tier.cost ? 'available' : 'cantafford';
+                }
+            } else {
+                state = 'unavailable';
+            }
+
+            // Background
+            let bgColor = '#21262d';
+            let textColor = '#f0f6fc';
+            let borderColor = '#30363d';
+
+            if (state === 'purchased') {
+                bgColor = '#238636';
+                borderColor = '#3fb950';
+            } else if (state === 'available') {
+                bgColor = '#1f6feb';
+                borderColor = '#58a6ff';
+            } else if (state === 'locked') {
+                bgColor = '#161b22';
+                textColor = '#484f58';
+            } else if (state === 'cantafford') {
+                bgColor = '#21262d';
+                textColor = '#6e7681';
+            } else {
+                textColor = '#484f58';
+            }
+
+            ctx.fillStyle = bgColor;
+            ctx.fillRect(x, tierY, 200, tierHeight - 2);
+            ctx.strokeStyle = borderColor;
+            ctx.lineWidth = 1;
+            ctx.strokeRect(x, tierY, 200, tierHeight - 2);
+
+            // Tier indicator
+            ctx.fillStyle = textColor;
+            ctx.font = 'bold 10px sans-serif';
+            ctx.textAlign = 'left';
+            const tierLabel = isChoice ? `T3${choiceLetter}` : `T${tierNum}`;
+            ctx.fillText(tierLabel, x + 5, tierY + 12);
+
+            // Name
+            ctx.font = '11px sans-serif';
+            ctx.fillText(tier.name, x + 35, tierY + 12);
+
+            // Description
+            ctx.fillStyle = state === 'purchased' ? '#a5d6a7' : '#8b949e';
+            ctx.font = '9px sans-serif';
+            ctx.fillText(tier.desc, x + 5, tierY + 24);
+
+            // Cost or status
+            ctx.textAlign = 'right';
+            if (state === 'purchased') {
+                ctx.fillStyle = '#3fb950';
+                ctx.font = 'bold 10px sans-serif';
+                ctx.fillText('✓', x + 195, tierY + 18);
+            } else if (state === 'locked') {
+                ctx.fillStyle = '#484f58';
+                ctx.font = '9px sans-serif';
+                ctx.fillText('LOCKED', x + 195, tierY + 18);
+            } else if (state === 'available' || state === 'cantafford') {
+                ctx.fillStyle = state === 'available' ? '#ffd700' : '#6e7681';
+                ctx.font = 'bold 10px sans-serif';
+                ctx.fillText(`${tier.cost}g`, x + 195, tierY + 18);
+            }
+        }
+    },
+
+    renderGameOver() {
+        const ctx = this.ctx;
+
+        ctx.fillStyle = 'rgba(0,0,0,0.8)';
+        ctx.fillRect(0, 0, 960, 720);
+
+        ctx.fillStyle = '#f44336';
+        ctx.font = 'bold 48px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('GAME OVER', 480, 320);
+
+        ctx.fillStyle = '#fff';
+        ctx.font = '24px sans-serif';
+        ctx.fillText(`Reached Wave ${this.state.wave}`, 480, 370);
+        ctx.fillText(`Final Score: ${this.state.score}`, 480, 410);
+    },
+
+    renderVictory() {
+        const ctx = this.ctx;
+
+        ctx.fillStyle = 'rgba(0,0,0,0.8)';
+        ctx.fillRect(0, 0, 960, 720);
+
+        ctx.fillStyle = '#ffd700';
+        ctx.font = 'bold 48px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('🏆 VICTORY! 🏆', 480, 320);
+
+        ctx.fillStyle = '#fff';
+        ctx.font = '24px sans-serif';
+        ctx.fillText('All 50 Waves Completed!', 480, 370);
+        ctx.fillText(`Final Score: ${this.state.score}`, 480, 410);
     },
 
     cleanup() {
         this.state = null;
         this.config = null;
         this.selectedTower = null;
-        this.hoveredCell = null;
-    },
-
-    reset() {
-        this.selectedTower = null;
-        this.hoveredCell = null;
-        this.selectedTowerType = 'archer';
+        this.showUpgradePopout = false;
     }
 };

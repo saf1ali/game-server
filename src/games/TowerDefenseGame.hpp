@@ -4,10 +4,12 @@
 #include <vector>
 #include <array>
 #include <cmath>
+#include <string>
 
 /**
  * Tower Defense game - Single player medieval kingdom defense.
  * Defend against 50 waves of enemies using 8 tower types.
+ * BTD-style branching upgrade system with two paths per tower.
  */
 class TowerDefenseGame : public Game {
 public:
@@ -86,15 +88,23 @@ private:
         MAGIC_BOLT,
         ICE_SHARD,
         POISON_DART,
-        LIGHTNING_BOLT
+        LIGHTNING_BOLT,
+        FIRE_ARROW,
+        ICE_ARROW
     };
 
     enum class EffectType {
         SLOW,
         POISON,
         BURN,
-        SHIELD
+        SHIELD,
+        STUN,
+        ARMOR_BREAK
     };
+
+    // BTD-style upgrade enums
+    enum class UpgradePath { PATH_A, PATH_B };
+    enum class Tier3Choice { NONE, CHOICE_A, CHOICE_B };
 
     // Structs
     struct Point {
@@ -113,15 +123,62 @@ private:
         int sourceId;
     };
 
+    // BTD-style upgrade state for each tower
+    struct UpgradeState {
+        int pathATier = 0;          // 0-3
+        int pathBTier = 0;          // 0-3
+        Tier3Choice pathATier3 = Tier3Choice::NONE;
+        Tier3Choice pathBTier3 = Tier3Choice::NONE;
+
+        bool isPathLocked(UpgradePath path) const {
+            if (path == UpgradePath::PATH_A) return pathBTier >= 3;
+            return pathATier >= 3;
+        }
+
+        int getMaxTier(UpgradePath path) const {
+            if (isPathLocked(path)) return 2;
+            return 3;
+        }
+
+        std::string getNotation() const {
+            std::string a = std::to_string(pathATier);
+            std::string b = std::to_string(pathBTier);
+            if (pathATier == 3 && pathATier3 != Tier3Choice::NONE) {
+                a = "3" + std::string(pathATier3 == Tier3Choice::CHOICE_A ? "A" : "B");
+            }
+            if (pathBTier == 3 && pathBTier3 != Tier3Choice::NONE) {
+                b = "3" + std::string(pathBTier3 == Tier3Choice::CHOICE_A ? "A" : "B");
+            }
+            return a + "-" + b;
+        }
+    };
+
     struct Tower {
         int id;
         TowerType type;
         int x, y;              // Grid position
-        int level;             // 0-3
+        UpgradeState upgrades; // BTD-style branching upgrades
         TargetPriority targeting;
         float cooldown;        // Time until next shot
         int targetId;          // Current target enemy (-1 if none)
         int totalInvested;     // For sell calculation
+
+        // Computed stats (recalculated when upgrades change)
+        int damage;
+        float range;
+        float attackSpeed;     // Attacks per second
+        int pierce;            // Number of enemies arrow can hit
+        int chainTargets;      // Lightning chain count
+        float slowStrength;    // Frost slow %
+        float dotDamage;       // Poison/burn DPS
+        float splashRadius;    // AOE radius
+        float stunDuration;    // Stun time
+        bool canHitFlying;
+        bool canHitCamo;
+
+        // Special ability tracking
+        float abilityTimer;    // For periodic abilities
+        int attackCounter;     // For "every Nth attack" abilities
     };
 
     struct Enemy {
@@ -133,11 +190,13 @@ private:
         int hp;
         int maxHp;
         int armor;
+        int baseArmor;         // Original armor (for armor break effects)
         float speed;           // Pixels per second
         float baseSpeed;       // Original speed (for slow effects)
         bool flying;
         bool camo;
         bool active;           // False when dead or reached end
+        int engagedBySoldierId; // Soldier blocking this enemy (-1 if none)
         std::vector<Effect> effects;
     };
 
@@ -150,6 +209,12 @@ private:
         int damage;
         int sourceId;          // Tower that fired
         float splashRadius;    // For AOE (0 = single target)
+        int pierce;            // Remaining enemies to hit
+        float slowStrength;    // For frost projectiles
+        float slowDuration;
+        float dotDamage;       // For poison/burn
+        float dotDuration;
+        float stunDuration;    // For stun effects
         bool active;
     };
 
@@ -157,6 +222,20 @@ private:
         EnemyType type;
         int count;
         float spawnDelay;      // Seconds between spawns
+    };
+
+    struct Soldier {
+        int id;
+        int barracksId;        // Which barracks spawned this
+        float x, y;            // Position on path
+        int hp;
+        int maxHp;
+        int damage;            // Damage per attack
+        int engagedEnemyId;    // Enemy currently fighting (-1 if none)
+        int blockCount;        // How many enemies can block (default 1)
+        float attackSpeed;     // Attacks per second
+        float attackCooldown;  // Time until next attack
+        bool active;
     };
 
     struct Wave {
@@ -183,12 +262,20 @@ private:
         bool camo;
     };
 
+    // Upgrade definition for a single tier
+    struct UpgradeDef {
+        std::string name;
+        int cost;
+        std::string description;
+    };
+
     // Game state
     std::array<std::array<CellType, GRID_WIDTH>, GRID_HEIGHT> map_;
     std::vector<Point> path_;              // Waypoints
     std::vector<Tower> towers_;
     std::vector<Enemy> enemies_;
     std::vector<Projectile> projectiles_;
+    std::vector<Soldier> soldiers_;        // Barracks soldiers
 
     int gold_;
     int lives_;
@@ -204,12 +291,17 @@ private:
     int nextTowerId_;
     int nextEnemyId_;
     int nextProjectileId_;
+    int nextSoldierId_;
 
     // Static data
     static const std::vector<Wave> WAVES;
     static const std::array<TowerStats, 8> TOWER_STATS;
     static const std::array<EnemyStats, 15> ENEMY_STATS;
-    static const std::array<std::array<float, 4>, 8> UPGRADE_MULTIPLIERS; // [tower][level] -> damage mult
+
+    // Upgrade definitions: [towerType][path][tier] -> UpgradeDef
+    // Path A = index 0, Path B = index 1
+    // Tier 1,2,3A,3B = indices 0,1,2,3
+    static const std::array<std::array<std::array<UpgradeDef, 4>, 2>, 8> UPGRADE_DEFS;
 
     // Methods - Map
     void initMap();
@@ -219,26 +311,38 @@ private:
     // Methods - Towers
     bool placeTower(TowerType type, int x, int y);
     bool sellTower(int towerId);
-    bool upgradeTower(int towerId);
+    bool purchaseUpgrade(int towerId, UpgradePath path, int tier, Tier3Choice choice = Tier3Choice::NONE);
+    bool canPurchaseUpgrade(const Tower& tower, UpgradePath path, int tier, Tier3Choice choice = Tier3Choice::NONE) const;
+    int getUpgradeCost(TowerType type, UpgradePath path, int tier, Tier3Choice choice = Tier3Choice::NONE) const;
+    void recalculateTowerStats(Tower& tower);
     void setTargeting(int towerId, TargetPriority priority);
     void updateTowers(float dt);
     int findTarget(const Tower& tower) const;
     void fireTower(Tower& tower, Enemy& target);
-    const TowerStats& getTowerStats(TowerType type) const;
-    int getTowerCost(TowerType type, int level) const;
-    int getTowerDamage(const Tower& tower) const;
-    float getTowerRange(const Tower& tower) const;
+    const TowerStats& getBaseStats(TowerType type) const;
 
     // Methods - Enemies
     void spawnEnemy(EnemyType type);
     void updateEnemies(float dt);
-    void damageEnemy(Enemy& enemy, int damage, bool isMagic = false);
+    void damageEnemy(Enemy& enemy, int damage, bool isMagic = false, bool ignoreSlow = false);
     void killEnemy(Enemy& enemy);
     void applyEffect(Enemy& enemy, EffectType type, float duration, float strength, int sourceId);
     const EnemyStats& getEnemyStats(EnemyType type) const;
+    int getEnemyDamage(EnemyType type) const;
+
+    // Methods - Soldiers (Barracks)
+    void spawnSoldiersForBarracks(Tower& barracks);
+    void respawnAllSoldiers();
+    void updateSoldiers(float dt);
+    void killSoldier(Soldier& soldier);
+    int getSoldierCount(const Tower& barracks) const;
+    int getSoldierMaxHp(const Tower& barracks) const;
+    int getSoldierDamage(const Tower& barracks) const;
+    int getSoldierBlockCount(const Tower& barracks) const;
+    FloatPoint getSoldierSpawnPosition(const Tower& barracks, int soldierIndex) const;
 
     // Methods - Projectiles
-    void createProjectile(const Tower& tower, const Enemy& target);
+    void createProjectile(Tower& tower, Enemy& target);
     void updateProjectiles(float dt);
 
     // Methods - Waves
@@ -253,4 +357,5 @@ private:
     std::string enemyTypeToString(EnemyType type) const;
     TowerType stringToTowerType(const std::string& str) const;
     TargetPriority stringToTargetPriority(const std::string& str) const;
+    json upgradeStateToJson(const UpgradeState& state) const;
 };
