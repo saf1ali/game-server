@@ -143,6 +143,9 @@ const Game = {
         } else if (type === 'towerdefense') {
             this.renderer = TowerDefenseRenderer;
             this.renderer.init(canvas);
+        } else if (type === 'agar') {
+            this.renderer = AgarRenderer;
+            this.renderer.init(canvas);
         }
 
         // Initialize in-game chat for all games except chat room
