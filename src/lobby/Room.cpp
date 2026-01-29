@@ -58,6 +58,12 @@ bool Room::addPlayer(Connection* conn) {
     }
 
     Logger::game("Player '{}' joined room '{}' ({})", conn->getUsername(), name_, gameType_);
+
+    // Auto-start single-player games when player joins
+    if (canStart() && getMaxPlayers() == 1) {
+        start();
+    }
+
     return true;
 }
 

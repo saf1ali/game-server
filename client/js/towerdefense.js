@@ -662,7 +662,7 @@ const TowerDefenseRenderer = {
         }
 
         // Start wave button
-        if (!this.state.waveActive && this.state.wave < this.state.maxWaves) {
+        if (!this.state.waveActive && this.state.wave <= this.state.maxWaves) {
             ctx.fillStyle = '#238636';
             ctx.fillRect(panelX + 10, 660, 220, 50);
 
