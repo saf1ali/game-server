@@ -13,7 +13,8 @@ SlitherGame::SlitherGame()
 }
 
 void SlitherGame::start() {
-    started_ = true;
+    // Initialize game state BEFORE setting started_ to avoid race condition
+    // The game loop thread checks started_ to decide whether to call update()
     gameOver_ = false;
     winner_ = -1;
     currentRound_ = 1;
@@ -31,21 +32,24 @@ void SlitherGame::start() {
     }
 
     Logger::game("Slither Battle started with {} players!", snakes_.size());
+
+    // Set started_ LAST to ensure game loop doesn't access uninitialized state
+    started_ = true;
 }
 
 void SlitherGame::update(float deltaTime) {
-    if (!started_ || gameOver_) return;
+    if (!started_ || gameOver_ || snakes_.empty()) return;
 
     // Move all alive snakes
     for (int i = 0; i < static_cast<int>(snakes_.size()); i++) {
-        if (snakes_[i].alive) {
+        if (snakes_[i].alive && !snakes_[i].body.empty()) {
             moveSnake(i, deltaTime);
         }
     }
 
     // Check collisions for all snakes
     for (int i = 0; i < static_cast<int>(snakes_.size()); i++) {
-        if (snakes_[i].alive) {
+        if (snakes_[i].alive && !snakes_[i].body.empty()) {
             checkFoodCollision(i);
             checkWallCollision(i);
             checkSnakeCollision(i);
@@ -361,7 +365,7 @@ void SlitherGame::startNewRound() {
     Logger::game("Starting round {} of Slither Battle!", currentRound_);
 }
 
-void SlitherGame::onPlayerJoin(int playerId) {
+void SlitherGame::onPlayerJoin(int playerId, const std::string& username) {
     // Ensure snakes vector is large enough
     while (snakes_.size() <= static_cast<size_t>(playerId)) {
         snakes_.push_back(Snake());
@@ -369,13 +373,13 @@ void SlitherGame::onPlayerJoin(int playerId) {
 
     Snake& s = snakes_[playerId];
     s.color = PLAYER_COLORS[playerId % PLAYER_COLORS.size()];
-    s.username = "Player" + std::to_string(playerId + 1);
+    s.username = username.empty() ? "Player" + std::to_string(playerId + 1) : username;
     s.roundWins = 0;
     s.score = 0;
     s.alive = false;
 
     numPlayers_++;
-    Logger::game("Player {} joined Slither", playerId);
+    Logger::game("Player {} ({}) joined Slither", playerId, s.username);
 }
 
 void SlitherGame::onPlayerLeave(int playerId) {
