@@ -303,24 +303,182 @@ const TowerDefenseRenderer = {
                 const py = y * cellSize;
 
                 if (cell === 0) {
-                    // Buildable - grass
-                    ctx.fillStyle = '#1e3a2f';
+                    // Buildable - grass with texture
+                    this.drawGrassTile(ctx, px, py, cellSize, x, y);
                 } else if (cell === 1) {
-                    // Path
-                    ctx.fillStyle = '#4a4a6a';
+                    // Path - cobblestone
+                    this.drawPathTile(ctx, px, py, cellSize, x, y);
                 } else {
-                    // Blocked - rocks
-                    ctx.fillStyle = '#2d2d3d';
+                    // Blocked - decorative rocks/trees
+                    this.drawBlockedTile(ctx, px, py, cellSize, x, y);
                 }
-
-                ctx.fillRect(px, py, cellSize, cellSize);
-
-                // Grid lines
-                ctx.strokeStyle = '#21262d';
-                ctx.lineWidth = 1;
-                ctx.strokeRect(px, py, cellSize, cellSize);
             }
         }
+
+        // Subtle grid overlay
+        ctx.strokeStyle = 'rgba(33, 38, 45, 0.5)';
+        ctx.lineWidth = 1;
+        for (let y = 0; y <= this.config.gridHeight; y++) {
+            ctx.beginPath();
+            ctx.moveTo(0, y * cellSize);
+            ctx.lineTo(this.config.gridWidth * cellSize, y * cellSize);
+            ctx.stroke();
+        }
+        for (let x = 0; x <= this.config.gridWidth; x++) {
+            ctx.beginPath();
+            ctx.moveTo(x * cellSize, 0);
+            ctx.lineTo(x * cellSize, this.config.gridHeight * cellSize);
+            ctx.stroke();
+        }
+    },
+
+    // Draw textured grass tile
+    drawGrassTile(ctx, px, py, size, gridX, gridY) {
+        // Base grass color with slight variation
+        const variation = ((gridX * 7 + gridY * 13) % 3) * 0.02;
+        ctx.fillStyle = `rgb(${30 + variation * 100}, ${58 + variation * 50}, ${47 + variation * 30})`;
+        ctx.fillRect(px, py, size, size);
+
+        // Grass texture (small dots/blades)
+        ctx.fillStyle = 'rgba(40, 80, 60, 0.4)';
+        const seed = gridX * 100 + gridY;
+        for (let i = 0; i < 8; i++) {
+            const sx = px + ((seed * (i + 1) * 17) % size);
+            const sy = py + ((seed * (i + 1) * 23) % size);
+            ctx.fillRect(sx, sy, 2, 4);
+        }
+
+        // Occasional flower or small detail
+        if ((gridX + gridY) % 7 === 0) {
+            ctx.fillStyle = '#ffeb3b';
+            ctx.beginPath();
+            ctx.arc(px + size * 0.3, py + size * 0.7, 2, 0, Math.PI * 2);
+            ctx.fill();
+        } else if ((gridX * 3 + gridY * 5) % 11 === 0) {
+            ctx.fillStyle = '#81c784';
+            ctx.beginPath();
+            ctx.arc(px + size * 0.6, py + size * 0.4, 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    },
+
+    // Draw cobblestone path tile
+    drawPathTile(ctx, px, py, size, gridX, gridY) {
+        // Base path color
+        ctx.fillStyle = '#5d5d7a';
+        ctx.fillRect(px, py, size, size);
+
+        // Cobblestone pattern
+        ctx.fillStyle = '#4a4a6a';
+        const stonePattern = [
+            [0.1, 0.1, 0.35, 0.4],
+            [0.5, 0.05, 0.45, 0.35],
+            [0.05, 0.55, 0.4, 0.4],
+            [0.5, 0.45, 0.45, 0.5]
+        ];
+
+        for (const [sx, sy, sw, sh] of stonePattern) {
+            ctx.fillStyle = ((gridX + gridY) % 2 === 0) ? '#4a4a6a' : '#525278';
+            ctx.beginPath();
+            ctx.roundRect(px + sx * size, py + sy * size, sw * size * 0.9, sh * size * 0.9, 3);
+            ctx.fill();
+        }
+
+        // Stone highlights
+        ctx.fillStyle = 'rgba(100, 100, 140, 0.3)';
+        ctx.fillRect(px + 4, py + 4, size * 0.3, 2);
+        ctx.fillRect(px + size * 0.5, py + size * 0.5, size * 0.25, 2);
+
+        // Worn path edges
+        ctx.fillStyle = 'rgba(80, 80, 100, 0.4)';
+        ctx.fillRect(px, py, size, 2);
+        ctx.fillRect(px, py + size - 2, size, 2);
+    },
+
+    // Draw blocked/decorative tile
+    drawBlockedTile(ctx, px, py, size, gridX, gridY) {
+        // Dark base
+        ctx.fillStyle = '#1a1a2a';
+        ctx.fillRect(px, py, size, size);
+
+        const decorType = (gridX * 3 + gridY * 7) % 4;
+
+        if (decorType === 0 || decorType === 1) {
+            // Draw rock formation
+            this.drawRockDecoration(ctx, px, py, size);
+        } else {
+            // Draw tree
+            this.drawTreeDecoration(ctx, px, py, size);
+        }
+    },
+
+    // Draw rock formation
+    drawRockDecoration(ctx, px, py, size) {
+        const cx = px + size / 2;
+        const cy = py + size / 2;
+
+        // Large rock
+        ctx.fillStyle = '#455a64';
+        ctx.beginPath();
+        ctx.ellipse(cx, cy + 4, size * 0.4, size * 0.3, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Rock top
+        ctx.fillStyle = '#546e7a';
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, size * 0.35, size * 0.25, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Highlight
+        ctx.fillStyle = '#607d8b';
+        ctx.beginPath();
+        ctx.ellipse(cx - 4, cy - 4, size * 0.15, size * 0.1, -0.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Small rocks
+        ctx.fillStyle = '#37474f';
+        ctx.beginPath();
+        ctx.arc(cx - size * 0.3, cy + size * 0.2, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(cx + size * 0.25, cy + size * 0.25, 5, 0, Math.PI * 2);
+        ctx.fill();
+    },
+
+    // Draw tree decoration
+    drawTreeDecoration(ctx, px, py, size) {
+        const cx = px + size / 2;
+        const cy = py + size / 2;
+
+        // Tree shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+        ctx.beginPath();
+        ctx.ellipse(cx + 4, cy + size * 0.35, size * 0.35, size * 0.15, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Trunk
+        ctx.fillStyle = '#5d4037';
+        ctx.fillRect(cx - 4, cy, 8, size * 0.35);
+
+        // Foliage layers
+        ctx.fillStyle = '#2e7d32';
+        ctx.beginPath();
+        ctx.arc(cx, cy - 2, size * 0.35, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#388e3c';
+        ctx.beginPath();
+        ctx.arc(cx - 4, cy + 4, size * 0.25, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(cx + 6, cy + 2, size * 0.22, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Highlights
+        ctx.fillStyle = '#4caf50';
+        ctx.beginPath();
+        ctx.arc(cx - 2, cy - 6, size * 0.12, 0, Math.PI * 2);
+        ctx.fill();
     },
 
     renderPath() {
@@ -330,36 +488,158 @@ const TowerDefenseRenderer = {
 
         if (!path || path.length < 2) return;
 
-        ctx.strokeStyle = '#6b5b4f';
-        ctx.lineWidth = 4;
-        ctx.setLineDash([10, 5]);
-        ctx.beginPath();
-        ctx.moveTo(path[0].x * cellSize + cellSize / 2, path[0].y * cellSize + cellSize / 2);
+        // Draw spawn portal
+        const spawn = path[0];
+        this.drawSpawnPortal(ctx, spawn.x * cellSize + cellSize / 2, spawn.y * cellSize + cellSize / 2);
 
-        for (let i = 1; i < path.length; i++) {
-            ctx.lineTo(path[i].x * cellSize + cellSize / 2, path[i].y * cellSize + cellSize / 2);
-        }
-        ctx.stroke();
-        ctx.setLineDash([]);
-
-        // Spawn marker
-        ctx.fillStyle = '#4CAF50';
-        ctx.beginPath();
-        ctx.arc(path[0].x * cellSize + cellSize / 2, path[0].y * cellSize + cellSize / 2, 15, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 12px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('S', path[0].x * cellSize + cellSize / 2, path[0].y * cellSize + cellSize / 2 + 4);
-
-        // Castle/End marker
+        // Draw castle at end
         const end = path[path.length - 1];
+        this.drawCastle(ctx, end.x * cellSize + cellSize / 2, end.y * cellSize + cellSize / 2);
+    },
+
+    // Draw spawn portal
+    drawSpawnPortal(ctx, x, y) {
+        const time = Date.now() / 1000;
+        const pulse = Math.sin(time * 3) * 0.2 + 0.8;
+
+        // Outer glow
+        ctx.fillStyle = `rgba(76, 175, 80, ${0.2 * pulse})`;
+        ctx.beginPath();
+        ctx.arc(x, y, 28, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Portal ring
+        ctx.strokeStyle = '#4CAF50';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(x, y, 20, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Inner portal
+        ctx.fillStyle = '#1b5e20';
+        ctx.beginPath();
+        ctx.arc(x, y, 16, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Swirl effect
+        ctx.strokeStyle = '#81c784';
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 3; i++) {
+            const angle = time * 2 + i * Math.PI * 2 / 3;
+            ctx.beginPath();
+            ctx.arc(x, y, 10, angle, angle + Math.PI / 2);
+            ctx.stroke();
+        }
+
+        // Center glow
+        ctx.fillStyle = '#a5d6a7';
+        ctx.beginPath();
+        ctx.arc(x, y, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Arrow indicating direction
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.moveTo(x + 24, y);
+        ctx.lineTo(x + 16, y - 6);
+        ctx.lineTo(x + 16, y + 6);
+        ctx.closePath();
+        ctx.fill();
+    },
+
+    // Draw castle
+    drawCastle(ctx, x, y) {
+        const time = Date.now() / 1000;
+
+        // Castle shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        ctx.beginPath();
+        ctx.ellipse(x + 4, y + 20, 24, 8, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Main castle body
+        ctx.fillStyle = '#5d4037';
+        ctx.fillRect(x - 18, y - 10, 36, 30);
+
+        // Castle front face
+        ctx.fillStyle = '#6d4c41';
+        ctx.fillRect(x - 16, y - 8, 32, 26);
+
+        // Door
+        ctx.fillStyle = '#3e2723';
+        ctx.beginPath();
+        ctx.moveTo(x - 6, y + 18);
+        ctx.lineTo(x - 6, y + 4);
+        ctx.arc(x, y + 4, 6, Math.PI, 0);
+        ctx.lineTo(x + 6, y + 18);
+        ctx.fill();
+
+        // Door handle
+        ctx.fillStyle = '#ffd700';
+        ctx.beginPath();
+        ctx.arc(x + 3, y + 10, 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Windows
+        ctx.fillStyle = '#ffeb3b';
+        ctx.globalAlpha = 0.6 + Math.sin(time * 2) * 0.2;
+        ctx.fillRect(x - 12, y - 2, 6, 8);
+        ctx.fillRect(x + 6, y - 2, 6, 8);
+        ctx.globalAlpha = 1;
+
+        // Tower left
+        ctx.fillStyle = '#5d4037';
+        ctx.fillRect(x - 22, y - 20, 12, 40);
+        ctx.fillStyle = '#6d4c41';
+        ctx.fillRect(x - 20, y - 18, 8, 36);
+
+        // Tower right
+        ctx.fillRect(x + 10, y - 20, 12, 40);
+        ctx.fillStyle = '#6d4c41';
+        ctx.fillRect(x + 12, y - 18, 8, 36);
+
+        // Battlements left
+        ctx.fillStyle = '#4e342e';
+        ctx.fillRect(x - 24, y - 24, 4, 6);
+        ctx.fillRect(x - 18, y - 24, 4, 6);
+        ctx.fillRect(x - 12, y - 24, 4, 6);
+
+        // Battlements right
+        ctx.fillRect(x + 8, y - 24, 4, 6);
+        ctx.fillRect(x + 14, y - 24, 4, 6);
+        ctx.fillRect(x + 20, y - 24, 4, 6);
+
+        // Battlements center
+        ctx.fillRect(x - 6, y - 14, 4, 4);
+        ctx.fillRect(x + 2, y - 14, 4, 4);
+
+        // Flags
+        ctx.fillStyle = '#5d4037';
+        ctx.fillRect(x - 18, y - 34, 2, 14);
+        ctx.fillRect(x + 16, y - 34, 2, 14);
+
+        // Flag cloth (waving)
+        const wave = Math.sin(time * 4) * 2;
         ctx.fillStyle = '#f44336';
         ctx.beginPath();
-        ctx.arc(end.x * cellSize + cellSize / 2, end.y * cellSize + cellSize / 2, 15, 0, Math.PI * 2);
+        ctx.moveTo(x - 16, y - 34);
+        ctx.quadraticCurveTo(x - 8, y - 32 + wave, x - 16, y - 26);
+        ctx.lineTo(x - 16, y - 34);
         ctx.fill();
-        ctx.fillStyle = '#fff';
-        ctx.fillText('E', end.x * cellSize + cellSize / 2, end.y * cellSize + cellSize / 2 + 4);
+
+        ctx.beginPath();
+        ctx.moveTo(x + 18, y - 34);
+        ctx.quadraticCurveTo(x + 26, y - 32 + wave, x + 18, y - 26);
+        ctx.lineTo(x + 18, y - 34);
+        ctx.fill();
+
+        // Lives indicator (hearts around castle)
+        if (this.state && this.state.lives !== undefined) {
+            ctx.fillStyle = '#f44336';
+            ctx.font = 'bold 12px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(`♥ ${this.state.lives}`, x, y + 32);
+        }
     },
 
     renderTowers() {
@@ -1877,13 +2157,238 @@ const TowerDefenseRenderer = {
 
     renderProjectiles() {
         const ctx = this.ctx;
+        const time = Date.now() / 1000;
 
         for (const proj of this.state.projectiles) {
-            ctx.fillStyle = '#fff';
+            ctx.save();
+            ctx.translate(proj.x, proj.y);
+
+            // Calculate rotation based on velocity (if available)
+            // For now, use the direction to target
+            const target = this.state.enemies.find(e => e.id === proj.targetId);
+            if (target) {
+                const angle = Math.atan2(target.y - proj.y, target.x - proj.x);
+                ctx.rotate(angle);
+            }
+
+            // Draw based on projectile type (0=arrow, 1=cannonball, 2=magic, 3=ice, 4=poison, 5=lightning)
+            switch (proj.type) {
+                case 0: this.drawArrowProjectile(ctx); break;
+                case 1: this.drawCannonballProjectile(ctx); break;
+                case 2: this.drawMagicBoltProjectile(ctx, time); break;
+                case 3: this.drawIceShardProjectile(ctx); break;
+                case 4: this.drawPoisonDartProjectile(ctx); break;
+                case 5: this.drawLightningBoltProjectile(ctx, time); break;
+                default: this.drawDefaultProjectile(ctx); break;
+            }
+
+            ctx.restore();
+        }
+    },
+
+    // Arrow projectile
+    drawArrowProjectile(ctx) {
+        // Shaft
+        ctx.fillStyle = '#8d6e63';
+        ctx.fillRect(-8, -1.5, 14, 3);
+
+        // Arrowhead
+        ctx.fillStyle = '#9e9e9e';
+        ctx.beginPath();
+        ctx.moveTo(6, -3);
+        ctx.lineTo(12, 0);
+        ctx.lineTo(6, 3);
+        ctx.closePath();
+        ctx.fill();
+
+        // Fletching
+        ctx.fillStyle = '#f44336';
+        ctx.beginPath();
+        ctx.moveTo(-8, -1);
+        ctx.lineTo(-12, -4);
+        ctx.lineTo(-8, 0);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(-8, 1);
+        ctx.lineTo(-12, 4);
+        ctx.lineTo(-8, 0);
+        ctx.fill();
+    },
+
+    // Cannonball projectile
+    drawCannonballProjectile(ctx) {
+        // Shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        ctx.beginPath();
+        ctx.ellipse(2, 2, 8, 4, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Ball
+        ctx.fillStyle = '#424242';
+        ctx.beginPath();
+        ctx.arc(0, 0, 7, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Highlight
+        ctx.fillStyle = '#616161';
+        ctx.beginPath();
+        ctx.arc(-2, -2, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Smoke trail
+        ctx.fillStyle = 'rgba(100, 100, 100, 0.4)';
+        for (let i = 0; i < 3; i++) {
             ctx.beginPath();
-            ctx.arc(proj.x, proj.y, 4, 0, Math.PI * 2);
+            ctx.arc(-10 - i * 6, (Math.random() - 0.5) * 4, 3 + i, 0, Math.PI * 2);
             ctx.fill();
         }
+    },
+
+    // Magic bolt projectile
+    drawMagicBoltProjectile(ctx, time) {
+        const pulse = Math.sin(time * 10) * 0.3 + 0.7;
+
+        // Outer glow
+        ctx.fillStyle = `rgba(156, 39, 176, ${0.3 * pulse})`;
+        ctx.beginPath();
+        ctx.arc(0, 0, 12, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Inner glow
+        ctx.fillStyle = `rgba(186, 104, 200, ${0.5 * pulse})`;
+        ctx.beginPath();
+        ctx.arc(0, 0, 8, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Core
+        ctx.fillStyle = '#e1bee7';
+        ctx.beginPath();
+        ctx.arc(0, 0, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Sparkles
+        ctx.fillStyle = '#fff';
+        for (let i = 0; i < 4; i++) {
+            const angle = time * 8 + i * Math.PI / 2;
+            const dist = 6 + Math.sin(time * 12 + i) * 2;
+            ctx.beginPath();
+            ctx.arc(Math.cos(angle) * dist, Math.sin(angle) * dist, 1.5, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    },
+
+    // Ice shard projectile
+    drawIceShardProjectile(ctx) {
+        // Main crystal
+        ctx.fillStyle = '#b3e5fc';
+        ctx.beginPath();
+        ctx.moveTo(10, 0);
+        ctx.lineTo(2, -4);
+        ctx.lineTo(-8, 0);
+        ctx.lineTo(2, 4);
+        ctx.closePath();
+        ctx.fill();
+
+        // Crystal shine
+        ctx.fillStyle = '#e1f5fe';
+        ctx.beginPath();
+        ctx.moveTo(6, -1);
+        ctx.lineTo(2, -2);
+        ctx.lineTo(-2, -1);
+        ctx.lineTo(2, 0);
+        ctx.closePath();
+        ctx.fill();
+
+        // Ice trail
+        ctx.fillStyle = 'rgba(179, 229, 252, 0.5)';
+        ctx.beginPath();
+        ctx.arc(-12, 0, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(179, 229, 252, 0.3)';
+        ctx.beginPath();
+        ctx.arc(-18, 0, 2, 0, Math.PI * 2);
+        ctx.fill();
+    },
+
+    // Poison dart projectile
+    drawPoisonDartProjectile(ctx) {
+        // Dart body
+        ctx.fillStyle = '#558b2f';
+        ctx.fillRect(-6, -2, 10, 4);
+
+        // Dart tip
+        ctx.fillStyle = '#33691e';
+        ctx.beginPath();
+        ctx.moveTo(4, -3);
+        ctx.lineTo(10, 0);
+        ctx.lineTo(4, 3);
+        ctx.closePath();
+        ctx.fill();
+
+        // Poison drip
+        ctx.fillStyle = '#8bc34a';
+        ctx.beginPath();
+        ctx.arc(8, 2, 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Poison trail
+        ctx.fillStyle = 'rgba(139, 195, 74, 0.4)';
+        for (let i = 0; i < 3; i++) {
+            ctx.beginPath();
+            ctx.arc(-8 - i * 5, Math.sin(i * 2) * 3, 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    },
+
+    // Lightning bolt projectile
+    drawLightningBoltProjectile(ctx, time) {
+        const jitter = Math.sin(time * 30) * 2;
+
+        // Electric glow
+        ctx.fillStyle = 'rgba(255, 235, 59, 0.4)';
+        ctx.beginPath();
+        ctx.arc(0, 0, 10, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Lightning bolt shape
+        ctx.strokeStyle = '#ffeb3b';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(-10, jitter);
+        ctx.lineTo(-4, -3 + jitter);
+        ctx.lineTo(0, 2 + jitter);
+        ctx.lineTo(6, -2 + jitter);
+        ctx.lineTo(10, jitter);
+        ctx.stroke();
+
+        // Core glow
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(-10, jitter);
+        ctx.lineTo(-4, -3 + jitter);
+        ctx.lineTo(0, 2 + jitter);
+        ctx.lineTo(6, -2 + jitter);
+        ctx.lineTo(10, jitter);
+        ctx.stroke();
+
+        // Sparks
+        ctx.fillStyle = '#fff';
+        for (let i = 0; i < 3; i++) {
+            const sparkX = (Math.random() - 0.5) * 16;
+            const sparkY = (Math.random() - 0.5) * 8;
+            ctx.beginPath();
+            ctx.arc(sparkX, sparkY, 1, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    },
+
+    // Default projectile fallback
+    drawDefaultProjectile(ctx) {
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(0, 0, 4, 0, Math.PI * 2);
+        ctx.fill();
     },
 
     renderHoverPreview() {
