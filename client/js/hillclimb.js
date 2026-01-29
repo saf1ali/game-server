@@ -153,15 +153,15 @@ const HillClimbGame = {
     // Mouse state for garage UI
     mouse: { x: 0, y: 0, clicked: false },
 
-    // Physics constants - tuned for responsive, fun gameplay
+    // Physics constants - stable with good handling
     physics: {
-        gravity: 0.5,
-        springStiffness: 0.3,
-        springDamping: 0.12,
+        gravity: 0.55,
+        springStiffness: 0.4,
+        springDamping: 0.2,
         springRestLength: 20,
         friction: 0.8,
         airRotationSpeed: 0.004,
-        groundFriction: 0.992,
+        groundFriction: 0.99,
         airDrag: 0.998
     },
 
