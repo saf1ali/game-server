@@ -1,45 +1,94 @@
 # Game Server - Claude Instructions
 
+> **Quick Start**: Building a new game? Jump to [Adding a New Game](#adding-a-new-game).
+> **Debugging?** Check [Troubleshooting](#troubleshooting) and [Known Issues & Solutions](#known-issues--solutions).
+
+---
+
+## Table of Contents
+1. [Project Overview](#project-overview)
+2. [Architecture](#architecture)
+3. [Building & Running](#building--running)
+4. [Adding a New Game](#adding-a-new-game)
+5. [Code Patterns & Best Practices](#code-patterns--best-practices)
+6. [Troubleshooting](#troubleshooting)
+7. [Known Issues & Solutions](#known-issues--solutions)
+
+---
+
 ## Project Overview
-C++ WebSocket game server supporting multiple real-time multiplayer games. Uses uWebSockets for networking and nlohmann/json for serialization.
+
+C++ WebSocket game server supporting multiple real-time multiplayer games.
+
+| Component | Library |
+|-----------|---------|
+| Networking | uWebSockets |
+| Serialization | nlohmann/json |
+| Build | CMake + MinGW |
+
+---
 
 ## Architecture
 
 ### Threading Model
-**CRITICAL**: uWebSockets is NOT thread-safe. All WebSocket operations and game updates MUST run on the same thread (the event loop thread). The game loop uses a `us_timer_t` repeating timer to schedule updates on the main event loop.
 
-#### How the Timer Works
-```cpp
-// In Server::run() - creates a REPEATING timer, not one-shot
-us_timer_set(gameTimer, callback, 16, 16);  // fires every 16ms forever
+> ⚠️ **CRITICAL**: uWebSockets is **NOT thread-safe**. All WebSocket operations MUST run on the event loop thread.
+
+The server uses a **single-threaded event loop** with a repeating timer for game updates:
+
 ```
-- First `16` = initial delay (ms)
-- Second `16` = repeat interval (ms)
-- Timer fires forever until server stops (~60 updates/second)
-- Each tick calls `lobby_.update(deltaTime)` which updates all game rooms
-
-#### Why Timer-Based (Not Threaded)?
-This is the **correct architecture** for uWebSockets:
-- uWebSockets uses a single-threaded event loop model (like Node.js)
-- All I/O (WebSocket reads/writes) happens on the event loop thread
-- Timer callbacks run on the same thread, so `ws->send()` is safe
-- No mutexes needed for WebSocket operations (only for shared game state)
-
-### Core Components
+┌─────────────────────────────────────────────────────────────┐
+│                     Event Loop Thread                        │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐  │
+│  │  WebSocket   │    │  Game Timer  │    │   I/O Ops    │  │
+│  │   Messages   │    │  (16ms tick) │    │              │  │
+│  └──────────────┘    └──────────────┘    └──────────────┘  │
+└─────────────────────────────────────────────────────────────┘
 ```
-Server (event loop + timer-based game loop)
+
+**Why timer-based, not threaded?**
+- uWebSockets uses single-threaded event loop (like Node.js)
+- Timer callbacks run on same thread as WebSocket I/O
+- No mutexes needed for WebSocket sends
+- `ws->send()` is always safe from timer callbacks
+
+### Component Hierarchy
+
+```
+Server (event loop + timer)
   └── Lobby (room management)
         └── Room (game instance + players)
               └── Game (game logic)
 ```
 
 ### Key Files
-- `src/server/Server.cpp` - WebSocket server and game loop timer
-- `src/lobby/Room.cpp` - Room management with mutex protection
-- `src/games/Game.hpp` - Base game class interface
-- `src/games/Game.cpp` - Game factory (registers all game types)
 
-## Building
+| File | Purpose |
+|------|---------|
+| `src/server/Server.cpp` | WebSocket server, event loop, game timer |
+| `src/lobby/Room.cpp` | Room management, mutex-protected game access |
+| `src/games/Game.hpp` | Base game interface (abstract class) |
+| `src/games/Game.cpp` | Game factory, type registration |
+
+### State Sync Flow
+
+```
+SERVER                                    CLIENT
+───────                                   ──────
+game_->update(dt)
+       │
+game_->getState() → JSON
+       │
+broadcastState() ──────────────────────→ updateState(state)
+                                                │
+                                          render()
+```
+
+**Games are server-authoritative**: Clients send input only, never modify state.
+
+---
+
+## Building & Running
 
 ```bash
 cd build
@@ -49,28 +98,47 @@ mingw32-make
 
 Open `client/index.html` in browser to play.
 
+---
+
 ## Adding a New Game
 
-### Workflow
-1. **Plan Mode**: Enter plan mode to design the game mechanics, state, and client rendering
-2. **Create Branch**: `git checkout -b feature/game-name`
-3. **Multiple Commits**: Make small, focused commits with conventional messages
-4. **Test**: Run server and test in browser
-5. **Merge**: `git checkout main && git merge feature/game-name`
+### Workflow Overview
 
-### Implementation Steps
-
-#### 1. Create Game Files
 ```
-src/games/MyGame.hpp
-src/games/MyGame.cpp
-client/js/mygame.js
+1. Plan Mode      →  Design mechanics, state shape, rendering
+2. Create Branch  →  git checkout -b feature/game-name
+3. Server Code    →  Game class (hpp/cpp)
+4. Register Game  →  Game.cpp factory + CMakeLists.txt
+5. Client Code    →  Renderer (js)
+6. Register UI    →  main.js + index.html + lobby.js
+7. Test           →  Build, run, play in browser
+8. Commit         →  Small, focused commits
+9. Merge          →  git checkout main && git merge feature/game-name
 ```
 
-#### 2. Implement Game Class (Server)
+### Step 1: Plan the Game
+
+Before writing code, define:
+
+- **State shape**: What JSON does `getState()` return?
+- **Input format**: What JSON does client send for input?
+- **Update logic**: What happens each tick?
+- **Win/lose conditions**: When is `isOver()` true?
+- **Player limits**: Min/max players?
+
+### Step 2: Create Files
+
+```
+src/games/MyGame.hpp      # Header
+src/games/MyGame.cpp      # Implementation
+client/js/mygame.js       # Renderer
+```
+
+### Step 3: Implement Server Game Class
+
+#### Header (`src/games/MyGame.hpp`)
 
 ```cpp
-// MyGame.hpp
 #pragma once
 #include "Game.hpp"
 
@@ -78,232 +146,478 @@ class MyGame : public Game {
 public:
     MyGame();
 
+    // Lifecycle
     void start() override;
     void update(float deltaTime) override;
+    
+    // Player events
+    void onPlayerJoin(int playerId, const std::string& username = "") override;
+    void onPlayerLeave(int playerId) override;
+    
+    // Input/Output
     void handleInput(int playerId, const json& input) override;
     json getState() const override;
-
+    
+    // Metadata
     bool isOver() const override { return gameOver_; }
     std::string getType() const override { return "mygame"; }
     int getMinPlayers() const override { return 2; }
     int getMaxPlayers() const override { return 4; }
 
-    void onPlayerJoin(int playerId, const std::string& username = "") override;
-    void onPlayerLeave(int playerId) override;
-
 private:
     bool gameOver_ = false;
-    // Game-specific state
+    // Add game-specific state here
 };
 ```
 
-Key points:
-- Set `started_ = true` at END of `start()` to avoid race conditions
-- Always check `started_`, `gameOver_`, and collection emptiness in `update()`
-- `getState()` returns JSON sent to all clients every frame
+#### Implementation (`src/games/MyGame.cpp`)
 
-#### 3. Register Game (Server)
+```cpp
+#include "MyGame.hpp"
 
-In `src/games/Game.cpp`:
+MyGame::MyGame() {
+    // Initialize default state
+}
+
+void MyGame::onPlayerJoin(int playerId, const std::string& username) {
+    // Setup player-specific state
+    // This runs BEFORE start()
+}
+
+void MyGame::onPlayerLeave(int playerId) {
+    // Cleanup player state
+}
+
+void MyGame::start() {
+    // Initialize game world
+    // Spawn entities, reset scores, etc.
+    
+    // ⚠️ CRITICAL: Set started_ = true LAST
+    started_ = true;
+}
+
+void MyGame::update(float deltaTime) {
+    // ⚠️ CRITICAL: Always guard against uninitialized state
+    if (!started_ || gameOver_) return;
+    
+    // Update game logic
+    // Check win conditions
+}
+
+void MyGame::handleInput(int playerId, const json& input) {
+    if (!started_ || gameOver_) return;
+    
+    // Process player input
+    // e.g., input["action"], input["direction"]
+}
+
+json MyGame::getState() const {
+    return {
+        {"players", /* player data */},
+        {"entities", /* game entities */},
+        {"gameOver", gameOver_}
+    };
+}
+```
+
+### Step 4: Register Server Game
+
+#### In `src/games/Game.cpp`
+
 ```cpp
 #include "MyGame.hpp"
 
 // In create() function:
-if (type == "mygame") return std::make_unique<MyGame>();
+std::unique_ptr<Game> Game::create(const std::string& type) {
+    if (type == "pong") return std::make_unique<PongGame>();
+    if (type == "snake") return std::make_unique<SnakeGame>();
+    if (type == "mygame") return std::make_unique<MyGame>();  // ← Add this
+    return nullptr;
+}
 
 // In getAvailableTypes():
-return {"pong", "snake", ..., "mygame"};
+std::vector<std::string> Game::getAvailableTypes() {
+    return {"pong", "snake", "mygame"};  // ← Add to list
+}
 ```
 
-In `CMakeLists.txt`:
+#### In `CMakeLists.txt`
+
 ```cmake
 set(SOURCES
     ...
-    src/games/MyGame.cpp
+    src/games/MyGame.cpp  # ← Add this
 )
 set(HEADERS
     ...
-    src/games/MyGame.hpp
+    src/games/MyGame.hpp  # ← Add this
 )
 ```
 
-#### 4. Create Renderer (Client)
+### Step 5: Implement Client Renderer
+
+#### Create `client/js/mygame.js`
 
 ```javascript
-// client/js/mygame.js
 const MyGameRenderer = {
     canvas: null,
     ctx: null,
     state: null,
-
+    animationId: null,
+    
+    // Called once when game starts
     init(canvas) {
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d');
         this.canvas.width = 800;
         this.canvas.height = 600;
+        this.state = null;
+        
         this.setupInput();
         this.startRenderLoop();
     },
-
+    
     setupInput() {
-        // Add event listeners, send via socket.send('input', {...})
+        // Keyboard
+        this.keyHandler = (e) => {
+            if (!this.state) return;
+            socket.send('input', { key: e.key });
+        };
+        window.addEventListener('keydown', this.keyHandler);
+        
+        // Mouse (if needed)
+        this.clickHandler = (e) => {
+            const rect = this.canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            socket.send('input', { click: { x, y } });
+        };
+        this.canvas.addEventListener('click', this.clickHandler);
     },
-
+    
+    // Called every frame from server
     updateState(state) {
         this.state = state;
     },
-
-    render() {
-        // Draw game based on this.state
+    
+    startRenderLoop() {
+        const loop = () => {
+            this.render();
+            this.animationId = requestAnimationFrame(loop);
+        };
+        loop();
     },
-
+    
+    render() {
+        const ctx = this.ctx;
+        
+        // Clear
+        ctx.fillStyle = '#1a1a2e';
+        ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        if (!this.state) {
+            ctx.fillStyle = '#fff';
+            ctx.fillText('Waiting for game...', 100, 100);
+            return;
+        }
+        
+        // Draw game based on this.state
+        // Example:
+        // this.state.players.forEach(p => this.drawPlayer(p));
+    },
+    
+    // Called when leaving game
     cleanup() {
-        // Remove event listeners, clear state
+        if (this.animationId) {
+            cancelAnimationFrame(this.animationId);
+        }
+        window.removeEventListener('keydown', this.keyHandler);
+        this.canvas.removeEventListener('click', this.clickHandler);
+        this.state = null;
     }
 };
 ```
 
-#### 5. Register Renderer (Client)
+### Step 6: Register Client UI
 
-In `client/js/main.js`:
+#### In `client/js/main.js`
+
 ```javascript
 // In App.initGame():
-} else if (type === 'mygame') {
-    this.renderer = MyGameRenderer;
+initGame(type) {
+    const canvas = document.getElementById('game-canvas');
+    
+    if (type === 'pong') {
+        this.renderer = PongRenderer;
+    } else if (type === 'snake') {
+        this.renderer = SnakeRenderer;
+    } else if (type === 'mygame') {      // ← Add this block
+        this.renderer = MyGameRenderer;
+    }
+    
     this.renderer.init(canvas);
 }
 ```
 
-In `client/index.html`:
+#### In `client/index.html`
+
 ```html
+<!-- Add script -->
 <script src="js/mygame.js"></script>
 
-<!-- In game-select modal -->
+<!-- In game-select modal, add button -->
 <button class="game-option" data-game="mygame">🎮 My Game</button>
 
-<!-- In games-preview -->
+<!-- In games-preview section, add card -->
 <div class="game-card">
     <span class="icon">🎮</span>
     <span>My Game</span>
 </div>
 ```
 
-In `client/js/lobby.js`:
+#### In `client/js/lobby.js`
+
 ```javascript
 getGameIcon(game) {
     const icons = {
-        ...,
-        mygame: '🎮'
+        pong: '🏓',
+        snake: '🐍',
+        mygame: '🎮'  // ← Add this
+    };
+    return icons[game] || '🎮';
+}
+```
+
+### Step 7: Test
+
+```bash
+cd build
+mingw32-make
+./game-server.exe
+# Open client/index.html in browser
+# Create room, select game, start
+```
+
+### Step 8: Commit
+
+Use conventional commits, no Claude attribution:
+
+```bash
+git add -A
+git commit -m "feat(mygame): add basic game mechanics"
+git commit -m "feat(mygame): implement client renderer"
+git commit -m "fix(mygame): resolve collision detection"
+git commit -m "style(mygame): polish UI elements"
+```
+
+---
+
+## Code Patterns & Best Practices
+
+### Server-Side Patterns
+
+#### Safe `start()` Function
+```cpp
+void MyGame::start() {
+    // 1. Initialize ALL state first
+    players_.clear();
+    for (auto& [id, player] : playerMap_) {
+        spawnPlayer(id);
+    }
+    spawnEntities();
+    
+    // 2. Set started_ LAST (prevents race condition)
+    started_ = true;
+}
+```
+
+#### Safe `update()` Function
+```cpp
+void MyGame::update(float deltaTime) {
+    // Guard clauses first
+    if (!started_) return;
+    if (gameOver_) return;
+    if (players_.empty()) return;
+    
+    // Safe to update
+    for (auto& player : players_) {
+        updatePlayer(player, deltaTime);
+    }
+}
+```
+
+#### Clean State JSON
+```cpp
+json MyGame::getState() const {
+    json state;
+    state["gameOver"] = gameOver_;
+    state["winner"] = winner_;
+    
+    // Use arrays for collections
+    state["players"] = json::array();
+    for (const auto& p : players_) {
+        state["players"].push_back({
+            {"id", p.id},
+            {"x", p.x},
+            {"y", p.y},
+            {"score", p.score}
+        });
+    }
+    
+    return state;
+}
+```
+
+### Client-Side Patterns
+
+#### Smooth Rendering
+```javascript
+render() {
+    // Always clear first
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Guard against null state
+    if (!this.state) return;
+    
+    // Draw in layers (back to front)
+    this.drawBackground();
+    this.drawEntities();
+    this.drawPlayers();
+    this.drawUI();
+}
+```
+
+#### Input Debouncing
+```javascript
+setupInput() {
+    let lastInput = 0;
+    const DEBOUNCE_MS = 50;
+    
+    this.keyHandler = (e) => {
+        const now = Date.now();
+        if (now - lastInput < DEBOUNCE_MS) return;
+        lastInput = now;
+        
+        socket.send('input', { key: e.key });
     };
 }
 ```
 
-## Commit Message Format
-Use conventional commits without Claude attribution:
+---
 
-```
-feat(mygame): add basic game mechanics
-fix(mygame): resolve collision detection issue
-refactor(mygame): extract helper functions
-style(mygame): improve UI layout
-```
+## Troubleshooting
 
-## Common Issues
+### Quick Diagnosis
 
-### Server Crashes on Game Start
-- Check that `started_ = true` is set LAST in `start()`
-- Ensure all vectors/collections are initialized before `started_` is set
-- Add null/empty checks in `update()` loops
+| Symptom | Likely Cause | Solution |
+|---------|--------------|----------|
+| Server crashes on game start | `started_ = true` set too early | Move to END of `start()` |
+| Server crashes on restart | WebSocket called from wrong thread | Ensure timer-based game loop |
+| "Cork buffer" error | Thread-safety violation | All `ws->send()` on event loop |
+| Game won't start (hangs) | Deadlock in mutex | Use `recursive_mutex` |
+| State not updating | `getState()` returning stale data | Check `started_` flag |
+| Client not receiving state | Renderer not registered | Check `main.js` switch statement |
 
-### Server Crashes on Restart
-- The mutex (`gameMutex_`) in Room protects game access between timer and message handlers
-- Don't modify game state without holding the lock
+### Debug Checklist
 
-### WebSocket Cork Buffer Error
-- All WebSocket sends must happen on the event loop thread
-- Game loop runs on timer, not separate thread
-- Never call `ws->send()` from background threads
+1. **Server compiles?**
+   - Check `CMakeLists.txt` includes new files
+   - Check `#include` statements
 
-## State Sync Pattern
-1. Server calls `game_->update(deltaTime)` on timer
-2. Server calls `game_->getState()` to get JSON
-3. Server broadcasts state to all room players
-4. Client `updateState(state)` receives the state
-5. Client `render()` draws based on state
+2. **Game registered?**
+   - Check `Game::create()` has your type
+   - Check `Game::getAvailableTypes()` includes it
 
-Games are authoritative on server - clients only send input, never modify state directly.
+3. **Client shows game?**
+   - Check `index.html` has script tag
+   - Check `index.html` has game button
+   - Check `main.js` has renderer case
+   - Check `lobby.js` has icon mapping
+
+4. **State flowing?**
+   - Add `console.log(state)` in `updateState()`
+   - Check server logs for broadcast
 
 ---
 
-## Historical Issues & Solutions
+## Known Issues & Solutions
 
-### Issue: Slither Game Crashed Server on Start (Race Condition)
+### Issue: Race Condition Crash on Start
 
-**Symptom**: Server crashed instantly when Slither game started, but other games worked fine.
+**Symptom**: Server crashes instantly when game starts.
 
-**Root Cause**: In `SlitherGame::start()`, `started_ = true` was set at the BEGINNING of the function. The game loop thread saw `started_ == true` and immediately called `update()` before snake bodies were initialized.
+**Cause**: `started_ = true` at BEGINNING of `start()`. Game loop sees `started_ == true` and calls `update()` before state is initialized.
 
-**Solution**: Move `started_ = true` to the END of `start()`, after all snakes and pellets are spawned:
+**Fix**:
 ```cpp
-void SlitherGame::start() {
+void MyGame::start() {
     // Initialize everything FIRST
-    for (int i = 0; i < snakes_.size(); i++) {
-        spawnSnake(i);
-    }
-    pellets_.clear();
-    for (int i = 0; i < INITIAL_PELLETS; i++) {
-        spawnPellet();
-    }
-
+    spawnPlayers();
+    spawnEntities();
+    
     // Set started_ LAST
     started_ = true;
 }
 ```
 
-**Why SnakeGame Didn't Crash**: SnakeGame initializes snake bodies in `onPlayerJoin()`, which runs before `start()`. So bodies were already populated.
-
 ---
 
-### Issue: Server Crashed After First Round (Cork Buffer Error)
+### Issue: Cork Buffer Error After First Round
 
-**Symptom**: After completing one round of Slither, server crashed with:
+**Symptom**: After completing one round, server crashes:
 ```
 Error: Cork buffer must not be acquired without checking canCork!
-terminate called without an active exception
 ```
 
-**Root Cause**: Original architecture used a **separate thread** for the game loop:
-```cpp
-// OLD (BROKEN) - game loop in separate thread
-gameLoopThread_ = std::thread(&Server::gameLoop, this);
-```
-This thread called `ws->send()` via `Room::broadcastState()`, but uWebSockets is not thread-safe. Calling WebSocket methods from a non-event-loop thread causes undefined behavior.
+**Cause**: Game loop running in separate thread called `ws->send()`. uWebSockets is not thread-safe.
 
-**Solution**: Use a **timer on the event loop** instead of a separate thread:
+**Fix**: Use timer on event loop (current architecture):
 ```cpp
-// NEW (CORRECT) - game loop on event loop via timer
-struct us_timer_t* gameTimer = us_create_timer(loop, 0, sizeof(Server*));
+// ✅ Correct: Timer callback runs on event loop
 us_timer_set(gameTimer, [](struct us_timer_t* timer) {
-    Server* server = *static_cast<Server**>(us_timer_ext(timer));
     server->lobby_.update(deltaTime);
-}, 16, 16);  // Repeating every 16ms
-```
+}, 16, 16);
 
-**Why This Is Better**:
-1. Thread-safe: All WebSocket operations on same thread
-2. Simpler: No mutexes needed for WebSocket sends
-3. Standard: This is how async game servers (Node.js, etc.) work
-4. Efficient: Event loop handles I/O and game ticks together
+// ❌ Wrong: Separate thread
+// gameLoopThread_ = std::thread(&Server::gameLoop, this);
+```
 
 ---
 
-### Issue: Game Wouldn't Start (Deadlock)
+### Issue: Deadlock on Start
 
-**Symptom**: Clicking "Start Game" did nothing.
+**Symptom**: Clicking "Start Game" does nothing, server hangs.
 
-**Root Cause**: Added `std::mutex` protection but `start()` acquired the lock, then called `canStart()` which also tried to acquire the same lock = deadlock.
+**Cause**: `start()` acquires lock, calls `canStart()` which tries to acquire same lock.
 
-**Solution**: Use `std::recursive_mutex` instead of `std::mutex`:
+**Fix**: Use `std::recursive_mutex`:
 ```cpp
-mutable std::recursive_mutex gameMutex_;  // Allows same thread to lock multiple times
+mutable std::recursive_mutex gameMutex_;
 ```
+
+---
+
+### Issue: Players Not Appearing
+
+**Symptom**: Game starts but players are invisible.
+
+**Cause**: `onPlayerJoin()` not populating player state, or `getState()` not including players.
+
+**Fix**: Ensure `onPlayerJoin()` creates player data and `getState()` serializes it.
+
+---
+
+## Commit Message Format
+
+```
+type(scope): description
+
+feat(mygame): add power-up system
+fix(mygame): prevent players from spawning in walls  
+refactor(mygame): extract collision detection to helper
+style(mygame): improve health bar visuals
+docs(mygame): add gameplay instructions
+test(mygame): add unit tests for scoring
+```
+
+Types: `feat`, `fix`, `refactor`, `style`, `docs`, `test`, `chore`
