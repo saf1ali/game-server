@@ -828,6 +828,26 @@ const HillClimbGame = {
             this.spawnParticle(rearWheelX, rearGroundY, 'dust');
         }
 
+        // Exhaust smoke when accelerating
+        if (this.input.gas && Math.random() < 0.4) {
+            const exhaustX = car.x - Math.cos(car.rotation) * (vehicle.bodyWidth / 2 + 5);
+            const exhaustY = car.y - Math.sin(car.rotation) * (vehicle.bodyWidth / 2 + 5);
+            this.spawnParticle(exhaustX, exhaustY, 'exhaust');
+        }
+
+        // Landing effect when wheels touch ground after air time
+        if (isGrounded && this.wasAirborne) {
+            this.spawnParticle(frontWheelX, frontGroundY, 'landing');
+            this.spawnParticle(rearWheelX, rearGroundY, 'landing');
+        }
+        this.wasAirborne = !isGrounded;
+
+        // Sparks when body scrapes ground
+        const bodyGroundY = this.getTerrainHeight(car.x);
+        if (car.y + 5 > bodyGroundY && Math.abs(car.vx) > 3) {
+            this.spawnParticle(car.x, bodyGroundY, 'sparks');
+        }
+
         // Update camera
         this.updateCamera();
     },
@@ -886,17 +906,30 @@ const HillClimbGame = {
     // PARTICLES
     // ============================================
     spawnParticle(x, y, type) {
-        const count = type === 'dust' ? 3 : (type === 'coin' ? 8 : 12);
+        const configs = {
+            dust: { count: 4, vxMult: 3, vyMult: 2, decay: 0.03, size: [3, 7] },
+            coin: { count: 10, vxMult: 5, vyMult: 3, decay: 0.025, size: [3, 5] },
+            fuel: { count: 12, vxMult: 4, vyMult: 3, decay: 0.02, size: [4, 6] },
+            flip: { count: 20, vxMult: 8, vyMult: 6, decay: 0.015, size: [3, 6] },
+            milestone: { count: 15, vxMult: 6, vyMult: 5, decay: 0.02, size: [4, 7] },
+            exhaust: { count: 2, vxMult: 1, vyMult: 1.5, decay: 0.04, size: [2, 4] },
+            landing: { count: 8, vxMult: 5, vyMult: 2, decay: 0.03, size: [4, 8] },
+            sparks: { count: 6, vxMult: 8, vyMult: 6, decay: 0.05, size: [2, 4] }
+        };
 
-        for (let i = 0; i < count; i++) {
+        const cfg = configs[type] || configs.dust;
+
+        for (let i = 0; i < cfg.count; i++) {
             this.particles.push({
-                x, y,
-                vx: (Math.random() - 0.5) * (type === 'dust' ? 3 : 6),
-                vy: -Math.random() * (type === 'dust' ? 2 : 4),
+                x: x + (Math.random() - 0.5) * 10,
+                y: y + (Math.random() - 0.5) * 5,
+                vx: (Math.random() - 0.5) * cfg.vxMult,
+                vy: -Math.random() * cfg.vyMult - 0.5,
                 life: 1.0,
-                decay: 0.02 + Math.random() * 0.02,
+                decay: cfg.decay + Math.random() * 0.01,
                 type,
-                size: type === 'dust' ? 3 + Math.random() * 4 : 4 + Math.random() * 3
+                size: cfg.size[0] + Math.random() * (cfg.size[1] - cfg.size[0]),
+                rotation: Math.random() * Math.PI * 2
             });
         }
     },
@@ -905,8 +938,22 @@ const HillClimbGame = {
         for (const p of this.particles) {
             p.x += p.vx;
             p.y += p.vy;
-            p.vy += 0.1; // gravity
+
+            // Type-specific physics
+            if (p.type === 'exhaust') {
+                p.vy -= 0.05; // Float up
+                p.vx *= 0.98;
+                p.size *= 1.02; // Expand
+            } else if (p.type === 'sparks') {
+                p.vy += 0.2; // Heavy gravity
+            } else {
+                p.vy += 0.1; // Normal gravity
+            }
+
             p.life -= p.decay;
+            if (p.rotation !== undefined) {
+                p.rotation += p.vx * 0.1;
+            }
         }
 
         this.particles = this.particles.filter(p => p.life > 0);
@@ -1442,19 +1489,45 @@ const HillClimbGame = {
         for (const p of this.particles) {
             ctx.globalAlpha = p.life;
 
-            if (p.type === 'dust') {
-                ctx.fillStyle = '#8b7355';
-            } else if (p.type === 'coin') {
-                ctx.fillStyle = '#ffd700';
-            } else if (p.type === 'fuel') {
-                ctx.fillStyle = '#32cd32';
-            } else if (p.type === 'flip' || p.type === 'milestone') {
-                ctx.fillStyle = '#ff6b6b';
-            }
+            const colors = {
+                dust: '#8b7355',
+                coin: '#ffd700',
+                fuel: '#32cd32',
+                flip: '#ff6b6b',
+                milestone: '#05ffa1',
+                exhaust: `rgba(100, 100, 100, ${p.life * 0.5})`,
+                landing: '#c9a86c',
+                sparks: '#ffaa00'
+            };
 
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
-            ctx.fill();
+            ctx.fillStyle = colors[p.type] || '#fff';
+
+            if (p.type === 'sparks') {
+                // Draw sparks as small lines
+                ctx.save();
+                ctx.translate(p.x, p.y);
+                ctx.rotate(p.rotation || 0);
+                ctx.fillRect(-p.size, -1, p.size * 2, 2);
+                ctx.restore();
+            } else if (p.type === 'exhaust') {
+                // Exhaust is more transparent and larger
+                ctx.globalAlpha = p.life * 0.4;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size * (2 - p.life), 0, Math.PI * 2);
+                ctx.fill();
+            } else if (p.type === 'coin' || p.type === 'milestone') {
+                // Add glow effect
+                ctx.shadowColor = colors[p.type];
+                ctx.shadowBlur = 10;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            } else {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+                ctx.fill();
+            }
         }
 
         ctx.globalAlpha = 1;
