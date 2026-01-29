@@ -25,6 +25,7 @@ set(SOURCES
     src/games/TetrisGame.cpp
     src/games/CheckersGame.cpp
     src/games/ConnectFourGame.cpp
+    src/games/SlitherGame.cpp
 )
 
 # Header files
@@ -38,6 +39,7 @@ set(HEADERS
     src/games/SnakeGame.hpp
     src/games/ChatRoom.hpp
     src/games/ConnectFourGame.hpp
+    src/games/SlitherGame.hpp
     src/physics/Vector2.hpp
     src/physics/Collision.hpp
     src/utils/Logger.hpp
