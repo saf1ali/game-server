@@ -20,7 +20,10 @@ const HillClimbGame = {
         distance: 0,
         gameOver: false,
         gameOverReason: '',
-        paused: false
+        paused: false,
+        showGarage: true,
+        garageTab: 'vehicles', // 'vehicles' or 'upgrades'
+        selectedUpgrade: 'engine'
     },
 
     // Progression (saved to localStorage)
@@ -133,6 +136,15 @@ const HillClimbGame = {
             bodyColor: '#7b1fa2'
         }
     },
+
+    // Upgrade costs (level -> cost)
+    upgradeCosts: [
+        0, 500, 1000, 2000, 4000, 8000, 15000, 25000, 40000, 60000,
+        100000, 150000, 250000, 400000, 600000, 1000000, 1500000, 2500000, 4000000, 6000000
+    ],
+
+    // Mouse state for garage UI
+    mouse: { x: 0, y: 0, clicked: false },
 
     // Physics constants
     physics: {
@@ -449,9 +461,17 @@ const HillClimbGame = {
     // ============================================
     setupInput() {
         this.keyDownHandler = (e) => {
+            // Garage mode keyboard shortcuts
+            if (this.state.showGarage) {
+                if (e.code === 'Enter' || e.code === 'Space') {
+                    this.startFromGarage();
+                }
+                return;
+            }
+
             if (this.state.gameOver) {
                 if (e.code === 'Space' || e.code === 'Enter') {
-                    this.resetGame();
+                    this.state.showGarage = true;
                 }
                 return;
             }
@@ -478,15 +498,127 @@ const HillClimbGame = {
             }
         };
 
+        // Mouse handling for garage UI
+        this.mouseMoveHandler = (e) => {
+            const rect = this.canvas.getBoundingClientRect();
+            this.mouse.x = (e.clientX - rect.left) * (this.canvas.width / rect.width);
+            this.mouse.y = (e.clientY - rect.top) * (this.canvas.height / rect.height);
+        };
+
+        this.mouseClickHandler = (e) => {
+            if (this.state.showGarage) {
+                this.handleGarageClick(this.mouse.x, this.mouse.y);
+            }
+        };
+
         window.addEventListener('keydown', this.keyDownHandler);
         window.addEventListener('keyup', this.keyUpHandler);
+        this.canvas.addEventListener('mousemove', this.mouseMoveHandler);
+        this.canvas.addEventListener('click', this.mouseClickHandler);
+    },
+
+    startFromGarage() {
+        this.state.showGarage = false;
+        this.resetGame();
+        this.state.showGarage = false;
+    },
+
+    handleGarageClick(x, y) {
+        const centerX = this.canvas.width / 2;
+        const centerY = this.canvas.height / 2;
+
+        // Tab buttons (top)
+        if (y >= 80 && y <= 120) {
+            if (x >= centerX - 150 && x <= centerX - 10) {
+                this.state.garageTab = 'vehicles';
+            } else if (x >= centerX + 10 && x <= centerX + 150) {
+                this.state.garageTab = 'upgrades';
+            }
+            return;
+        }
+
+        // Play button
+        if (y >= this.canvas.height - 80 && y <= this.canvas.height - 30) {
+            if (x >= centerX - 100 && x <= centerX + 100) {
+                this.startFromGarage();
+                return;
+            }
+        }
+
+        if (this.state.garageTab === 'vehicles') {
+            // Vehicle selection grid
+            const vehicles = Object.keys(this.vehicles);
+            const gridStartX = 100;
+            const gridStartY = 160;
+            const cardWidth = 180;
+            const cardHeight = 120;
+            const cols = 5;
+
+            for (let i = 0; i < vehicles.length; i++) {
+                const col = i % cols;
+                const row = Math.floor(i / cols);
+                const cardX = gridStartX + col * (cardWidth + 20);
+                const cardY = gridStartY + row * (cardHeight + 20);
+
+                if (x >= cardX && x <= cardX + cardWidth && y >= cardY && y <= cardY + cardHeight) {
+                    const vehicleId = vehicles[i];
+                    const vehicle = this.vehicles[vehicleId];
+
+                    if (this.save.unlockedVehicles.includes(vehicleId)) {
+                        // Select this vehicle
+                        this.save.selectedVehicle = vehicleId;
+                        this.saveGame();
+                    } else if (vehicle.cost && this.save.totalCoins >= vehicle.cost) {
+                        // Purchase vehicle
+                        this.save.totalCoins -= vehicle.cost;
+                        this.save.unlockedVehicles.push(vehicleId);
+                        this.save.selectedVehicle = vehicleId;
+                        this.save.upgrades[vehicleId] = { engine: 1, suspension: 1, tires: 1, fuel: 1 };
+                        this.saveGame();
+                    }
+                    return;
+                }
+            }
+        } else if (this.state.garageTab === 'upgrades') {
+            // Upgrade buttons
+            const upgrades = ['engine', 'suspension', 'tires', 'fuel'];
+            const startY = 180;
+
+            for (let i = 0; i < upgrades.length; i++) {
+                const upgradeY = startY + i * 100;
+                const btnX = this.canvas.width - 220;
+                const btnY = upgradeY + 25;
+
+                if (x >= btnX && x <= btnX + 120 && y >= btnY && y <= btnY + 40) {
+                    this.purchaseUpgrade(upgrades[i]);
+                    return;
+                }
+            }
+        }
+    },
+
+    purchaseUpgrade(upgradeType) {
+        const vehicleId = this.save.selectedVehicle;
+        if (!this.save.upgrades[vehicleId]) {
+            this.save.upgrades[vehicleId] = { engine: 1, suspension: 1, tires: 1, fuel: 1 };
+        }
+
+        const currentLevel = this.save.upgrades[vehicleId][upgradeType];
+        if (currentLevel >= 20) return; // Max level
+
+        const cost = this.upgradeCosts[currentLevel] || 10000000;
+        if (this.save.totalCoins >= cost) {
+            this.save.totalCoins -= cost;
+            this.save.upgrades[vehicleId][upgradeType]++;
+            this.saveGame();
+        }
     },
 
     // ============================================
     // PHYSICS UPDATE
     // ============================================
     update(dt) {
-        if (this.state.paused || this.state.gameOver) return;
+        if (this.state.showGarage || this.state.paused || this.state.gameOver) return;
 
         const car = this.state.car;
         const vehicle = this.vehicles[this.save.selectedVehicle];
@@ -861,6 +993,244 @@ const HillClimbGame = {
         if (this.state.paused) {
             this.drawPaused();
         }
+
+        if (this.state.showGarage) {
+            this.drawGarage();
+        }
+    },
+
+    drawGarage() {
+        const ctx = this.ctx;
+        const centerX = this.canvas.width / 2;
+
+        // Dark overlay
+        ctx.fillStyle = 'rgba(10, 10, 20, 0.97)';
+        ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+        // Title
+        ctx.font = 'bold 42px Orbitron, Arial';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#05ffa1';
+        ctx.fillText('GARAGE', centerX, 50);
+
+        // Coins display
+        ctx.font = 'bold 20px Orbitron, Arial';
+        ctx.textAlign = 'right';
+        ctx.fillStyle = '#ffd700';
+        ctx.fillText(`${this.save.totalCoins.toLocaleString()}`, this.canvas.width - 30, 40);
+        ctx.beginPath();
+        ctx.arc(this.canvas.width - 120, 33, 12, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Tab buttons
+        const tabY = 80;
+        const tabHeight = 40;
+
+        // Vehicles tab
+        ctx.fillStyle = this.state.garageTab === 'vehicles' ? '#05ffa1' : '#333';
+        ctx.fillRect(centerX - 150, tabY, 140, tabHeight);
+        ctx.font = 'bold 16px Orbitron, Arial';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = this.state.garageTab === 'vehicles' ? '#000' : '#888';
+        ctx.fillText('VEHICLES', centerX - 80, tabY + 27);
+
+        // Upgrades tab
+        ctx.fillStyle = this.state.garageTab === 'upgrades' ? '#05ffa1' : '#333';
+        ctx.fillRect(centerX + 10, tabY, 140, tabHeight);
+        ctx.fillStyle = this.state.garageTab === 'upgrades' ? '#000' : '#888';
+        ctx.fillText('UPGRADES', centerX + 80, tabY + 27);
+
+        if (this.state.garageTab === 'vehicles') {
+            this.drawVehicleSelection();
+        } else {
+            this.drawUpgradePanel();
+        }
+
+        // Play button
+        const btnY = this.canvas.height - 80;
+        ctx.fillStyle = '#05ffa1';
+        ctx.fillRect(centerX - 100, btnY, 200, 50);
+        ctx.font = 'bold 22px Orbitron, Arial';
+        ctx.fillStyle = '#000';
+        ctx.fillText('PLAY', centerX, btnY + 35);
+
+        // Current vehicle preview
+        ctx.font = '14px Orbitron, Arial';
+        ctx.fillStyle = '#666';
+        ctx.fillText(`Selected: ${this.vehicles[this.save.selectedVehicle].name}`, centerX, this.canvas.height - 100);
+    },
+
+    drawVehicleSelection() {
+        const ctx = this.ctx;
+        const vehicles = Object.keys(this.vehicles);
+        const gridStartX = 100;
+        const gridStartY = 160;
+        const cardWidth = 180;
+        const cardHeight = 120;
+        const cols = 5;
+
+        for (let i = 0; i < vehicles.length; i++) {
+            const vehicleId = vehicles[i];
+            const vehicle = this.vehicles[vehicleId];
+            const col = i % cols;
+            const row = Math.floor(i / cols);
+            const cardX = gridStartX + col * (cardWidth + 20);
+            const cardY = gridStartY + row * (cardHeight + 20);
+
+            const isUnlocked = this.save.unlockedVehicles.includes(vehicleId);
+            const isSelected = this.save.selectedVehicle === vehicleId;
+            const canAfford = !isUnlocked && vehicle.cost && this.save.totalCoins >= vehicle.cost;
+
+            // Card background
+            if (isSelected) {
+                ctx.fillStyle = '#05ffa1';
+                ctx.fillRect(cardX - 3, cardY - 3, cardWidth + 6, cardHeight + 6);
+            }
+            ctx.fillStyle = isUnlocked ? '#1a1a2e' : '#0d0d15';
+            ctx.fillRect(cardX, cardY, cardWidth, cardHeight);
+
+            // Vehicle preview (simple rect)
+            ctx.save();
+            ctx.translate(cardX + cardWidth / 2, cardY + 45);
+
+            // Mini vehicle drawing
+            ctx.fillStyle = isUnlocked ? vehicle.bodyColor : '#333';
+            ctx.fillRect(-vehicle.bodyWidth / 2.5, -vehicle.bodyHeight / 2.5, vehicle.bodyWidth / 1.25, vehicle.bodyHeight / 1.25);
+            ctx.fillStyle = isUnlocked ? vehicle.color : '#444';
+            ctx.fillRect(-vehicle.bodyWidth / 2.5 + 3, -vehicle.bodyHeight / 2.5 + 2, vehicle.bodyWidth / 1.25 - 6, vehicle.bodyHeight / 3);
+
+            // Wheels
+            ctx.fillStyle = '#222';
+            ctx.beginPath();
+            ctx.arc(-vehicle.wheelBase / 3, vehicle.bodyHeight / 3, vehicle.wheelRadius / 1.5, 0, Math.PI * 2);
+            ctx.arc(vehicle.wheelBase / 3, vehicle.bodyHeight / 3, vehicle.wheelRadius / 1.5, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.restore();
+
+            // Vehicle name
+            ctx.font = 'bold 14px Orbitron, Arial';
+            ctx.textAlign = 'center';
+            ctx.fillStyle = isUnlocked ? '#fff' : '#666';
+            ctx.fillText(vehicle.name, cardX + cardWidth / 2, cardY + cardHeight - 25);
+
+            // Cost or Selected text
+            ctx.font = '12px Orbitron, Arial';
+            if (isUnlocked) {
+                if (isSelected) {
+                    ctx.fillStyle = '#05ffa1';
+                    ctx.fillText('SELECTED', cardX + cardWidth / 2, cardY + cardHeight - 8);
+                } else {
+                    ctx.fillStyle = '#888';
+                    ctx.fillText('OWNED', cardX + cardWidth / 2, cardY + cardHeight - 8);
+                }
+            } else if (vehicle.cost) {
+                ctx.fillStyle = canAfford ? '#ffd700' : '#ff4444';
+                ctx.fillText(`${(vehicle.cost / 1000).toFixed(0)}K`, cardX + cardWidth / 2, cardY + cardHeight - 8);
+            }
+
+            // Lock overlay
+            if (!isUnlocked) {
+                ctx.fillStyle = 'rgba(0,0,0,0.5)';
+                ctx.fillRect(cardX, cardY, cardWidth, cardHeight);
+                ctx.font = '24px Arial';
+                ctx.fillStyle = '#666';
+                ctx.fillText('🔒', cardX + cardWidth / 2, cardY + 50);
+            }
+        }
+    },
+
+    drawUpgradePanel() {
+        const ctx = this.ctx;
+        const vehicleId = this.save.selectedVehicle;
+        const vehicle = this.vehicles[vehicleId];
+        const upgrades = this.save.upgrades[vehicleId] || { engine: 1, suspension: 1, tires: 1, fuel: 1 };
+
+        // Vehicle name header
+        ctx.font = 'bold 24px Orbitron, Arial';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = vehicle.color;
+        ctx.fillText(vehicle.name, this.canvas.width / 2, 155);
+
+        const upgradeTypes = [
+            { id: 'engine', name: 'ENGINE', icon: '⚡', desc: 'Speed & Acceleration' },
+            { id: 'suspension', name: 'SUSPENSION', icon: '🔧', desc: 'Stability & Handling' },
+            { id: 'tires', name: 'TIRES', icon: '⚙️', desc: 'Grip & Hill Climbing' },
+            { id: 'fuel', name: 'FUEL TANK', icon: '⛽', desc: 'Fuel Capacity' }
+        ];
+
+        const startY = 180;
+        const rowHeight = 100;
+
+        for (let i = 0; i < upgradeTypes.length; i++) {
+            const upgrade = upgradeTypes[i];
+            const level = upgrades[upgrade.id] || 1;
+            const y = startY + i * rowHeight;
+
+            // Row background
+            ctx.fillStyle = '#1a1a2e';
+            ctx.fillRect(100, y, this.canvas.width - 200, 80);
+
+            // Icon
+            ctx.font = '32px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText(upgrade.icon, 120, y + 50);
+
+            // Name and description
+            ctx.font = 'bold 18px Orbitron, Arial';
+            ctx.fillStyle = '#fff';
+            ctx.fillText(upgrade.name, 180, y + 30);
+
+            ctx.font = '12px Orbitron, Arial';
+            ctx.fillStyle = '#666';
+            ctx.fillText(upgrade.desc, 180, y + 50);
+
+            // Level bar
+            const barX = 180;
+            const barY = y + 58;
+            const barWidth = 300;
+            const barHeight = 12;
+
+            ctx.fillStyle = '#333';
+            ctx.fillRect(barX, barY, barWidth, barHeight);
+
+            ctx.fillStyle = '#05ffa1';
+            ctx.fillRect(barX, barY, barWidth * (level / 20), barHeight);
+
+            // Level text
+            ctx.font = '12px Orbitron, Arial';
+            ctx.fillStyle = '#888';
+            ctx.textAlign = 'right';
+            ctx.fillText(`Lv.${level}/20`, barX + barWidth, y + 30);
+
+            // Upgrade button
+            const btnX = this.canvas.width - 220;
+            const btnY = y + 25;
+
+            if (level < 20) {
+                const cost = this.upgradeCosts[level] || 10000000;
+                const canAfford = this.save.totalCoins >= cost;
+
+                ctx.fillStyle = canAfford ? '#ffd700' : '#444';
+                ctx.fillRect(btnX, btnY, 120, 40);
+
+                ctx.font = 'bold 12px Orbitron, Arial';
+                ctx.textAlign = 'center';
+                ctx.fillStyle = canAfford ? '#000' : '#666';
+
+                const costText = cost >= 1000000 ? `${(cost / 1000000).toFixed(1)}M` : `${(cost / 1000).toFixed(0)}K`;
+                ctx.fillText(`UPGRADE`, btnX + 60, btnY + 17);
+                ctx.font = '11px Orbitron, Arial';
+                ctx.fillText(costText, btnX + 60, btnY + 32);
+            } else {
+                ctx.fillStyle = '#05ffa1';
+                ctx.fillRect(btnX, btnY, 120, 40);
+                ctx.font = 'bold 14px Orbitron, Arial';
+                ctx.textAlign = 'center';
+                ctx.fillStyle = '#000';
+                ctx.fillText('MAX', btnX + 60, btnY + 27);
+            }
+        }
     },
 
     drawParallaxBackground(parallax, color, heightScale) {
@@ -1223,6 +1593,11 @@ const HillClimbGame = {
 
         window.removeEventListener('keydown', this.keyDownHandler);
         window.removeEventListener('keyup', this.keyUpHandler);
+
+        if (this.canvas) {
+            this.canvas.removeEventListener('mousemove', this.mouseMoveHandler);
+            this.canvas.removeEventListener('click', this.mouseClickHandler);
+        }
 
         if (this.ctx && this.canvas) {
             this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
